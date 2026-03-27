@@ -15,10 +15,10 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "SaaS Template",
-    template: "%s | SaaS Template",
+    default: "Enfuse — Sanctions & PEP Screening",
+    template: "%s | Enfuse",
   },
-  description: "Production-ready SaaS boilerplate with Next.js, Supabase, and Stripe",
+  description: "Intelligent sanctions and PEP screening triage tool with three-layer pipeline",
 };
 
 export default function RootLayout({

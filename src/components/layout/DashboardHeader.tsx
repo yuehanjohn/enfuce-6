@@ -2,14 +2,12 @@
 
 import { Button, Avatar, Dropdown } from "@heroui/react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 
 export function DashboardHeader() {
   const router = useRouter();
-  const supabase = createClient();
 
   async function handleSignOut() {
-    await supabase.auth.signOut();
+    await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
     router.refresh();
   }
@@ -24,18 +22,12 @@ export function DashboardHeader() {
         <Dropdown.Trigger>
           <Button variant="ghost" isIconOnly>
             <Avatar size="sm">
-              <Avatar.Fallback>U</Avatar.Fallback>
+              <Avatar.Fallback>A</Avatar.Fallback>
             </Avatar>
           </Button>
         </Dropdown.Trigger>
         <Dropdown.Popover>
           <Dropdown.Menu>
-            <Dropdown.Item href="/settings/profile" id="profile">
-              Profile
-            </Dropdown.Item>
-            <Dropdown.Item href="/settings/billing" id="billing">
-              Billing
-            </Dropdown.Item>
             <Dropdown.Item id="signout" onAction={handleSignOut}>
               Sign Out
             </Dropdown.Item>

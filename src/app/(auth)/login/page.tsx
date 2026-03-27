@@ -1,132 +1,88 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { Button, Card, Input, Label, TextField, FieldError, Separator } from "@heroui/react";
-import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-
-const loginSchema = z.object({
-  email: z.string().email("Invalid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
-});
-
-type LoginForm = z.infer<typeof loginSchema>;
+import { useRouter } from "next/navigation";
+import { Button, Card } from "@heroui/react";
 
 export default function LoginPage() {
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const redirectTo = searchParams.get("redirectTo") || "/dashboard";
-  const supabase = createClient();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<LoginForm>({
-    resolver: zodResolver(loginSchema),
-  });
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
 
-  async function onSubmit(data: LoginForm) {
-    setIsLoading(true);
-    setError(null);
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email: data.email,
-      password: data.password,
-    });
+      if (!res.ok) {
+        setError("Invalid email or password");
+        return;
+      }
 
-    if (error) {
-      setError(error.message);
-      setIsLoading(false);
-      return;
+      router.push("/screening");
+      router.refresh();
+    } catch {
+      setError("Login failed");
+    } finally {
+      setLoading(false);
     }
-
-    router.push(redirectTo);
-    router.refresh();
-  }
-
-  async function handleOAuth(provider: "google" | "github") {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback?redirectTo=${redirectTo}`,
-      },
-    });
-    if (error) setError(error.message);
   }
 
   return (
     <Card>
       <Card.Header>
-        <div className="flex flex-col gap-1">
-          <Card.Title>Welcome back</Card.Title>
-          <Card.Description>Sign in to your account</Card.Description>
+        <div className="w-full text-center">
+          <h1 className="text-2xl font-bold">Enfuse</h1>
+          <p className="text-sm text-default-500 mt-1">Sanctions & PEP Screening Platform</p>
         </div>
       </Card.Header>
-      <Card.Content className="flex flex-col gap-4">
-        <div className="flex gap-2">
-          <Button variant="outline" className="flex-1" onPress={() => handleOAuth("google")}>
-            Google
-          </Button>
-          <Button variant="outline" className="flex-1" onPress={() => handleOAuth("github")}>
-            GitHub
-          </Button>
-        </div>
+      <Card.Content>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div className="rounded-lg bg-danger-50 p-3 text-sm text-danger">{error}</div>
+          )}
 
-        <div className="flex items-center gap-2">
-          <Separator className="flex-1" />
-          <span className="text-xs text-default-400">OR</span>
-          <Separator className="flex-1" />
-        </div>
-
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-          <TextField isInvalid={!!errors.email}>
-            <Label>Email</Label>
-            <Input
-              {...register("email")}
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Email</label>
+            <input
               type="email"
-              placeholder="you@example.com"
-              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="analyst@enfuse.demo"
+              required
+              className="w-full rounded-lg border border-default-200 bg-default-50 px-3 py-2 text-sm focus:border-primary focus:outline-none"
             />
-            <FieldError>{errors.email?.message}</FieldError>
-          </TextField>
-
-          <TextField isInvalid={!!errors.password}>
-            <Label>Password</Label>
-            <Input
-              {...register("password")}
-              type="password"
-              placeholder="Enter your password"
-              autoComplete="current-password"
-            />
-            <FieldError>{errors.password?.message}</FieldError>
-          </TextField>
-
-          {error && <p className="text-sm text-danger">{error}</p>}
-
-          <div className="flex justify-end">
-            <Link href="/forgot-password" className="text-sm text-primary hover:underline">
-              Forgot password?
-            </Link>
           </div>
 
-          <Button type="submit" variant="primary" isDisabled={isLoading} className="w-full">
-            {isLoading ? "Signing in..." : "Sign In"}
-          </Button>
-        </form>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter password"
+              required
+              className="w-full rounded-lg border border-default-200 bg-default-50 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+            />
+          </div>
 
-        <p className="text-center text-sm text-default-500">
-          Don&apos;t have an account?{" "}
-          <Link href="/signup" className="text-primary hover:underline">
-            Sign up
-          </Link>
-        </p>
+          <Button type="submit" variant="primary" className="w-full" isDisabled={loading}>
+            {loading ? "Signing in..." : "Sign In"}
+          </Button>
+
+          <p className="text-xs text-default-400 text-center">
+            Demo credentials: analyst@enfuse.demo / enfuse2026
+          </p>
+        </form>
       </Card.Content>
     </Card>
   );

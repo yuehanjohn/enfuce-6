@@ -1,105 +1,147 @@
-# SaaS Starting Template
+# Enfuse — Sanctions & PEP Screening Triage Tool
 
-A production-ready SaaS boilerplate built with Next.js 16, Supabase, Stripe, and HeroUI.
+Intelligent three-layer screening pipeline that combines deterministic rules, Snowflake Cortex AI reasoning, and human-in-the-loop review to screen customers against global sanctions and PEP lists.
+
+## Architecture
+
+```
+100,000 Customers Onboarded
+          |
+  Layer 1: Hard Rule Engine        Deterministic · Jaro-Winkler · DOB · Nationality
+          |
+    ~300 Flagged Customers
+          |
+  Layer 2: AI Warehouse            Snowflake Cortex · Brave Search · Batch
+          |
+    >= 90%  -->  AUTO-RESTRICT
+    <= 10%  -->  AUTO-CLEAR
+    10-90%  -->  Human Queue
+          |
+  Layer 3: Human Review             Dashboard · AI Chat · Approve / Reject
+```
 
 ## Stack
 
-- **Framework**: Next.js 16 (App Router, TypeScript strict mode)
+- **Framework**: Next.js 16 (App Router, TypeScript)
 - **UI**: HeroUI v3 + Tailwind CSS v4
-- **Auth + DB**: Supabase (SSR-safe, RLS policies)
-- **Payments**: Stripe (Checkout, Webhooks, Customer Portal)
-- **Email**: Resend + React Email templates
-- **Validation**: Zod
-- **State**: Zustand (client) + React Query (server state)
-- **Forms**: React Hook Form + Zod resolvers
+- **Data Warehouse**: Snowflake (SQL API)
+- **AI**: Snowflake Cortex (`COMPLETE()`) + Brave Search (`SEARCH_PREVIEW()`)
+- **Auth**: Simple cookie-based demo auth (hardcoded credentials)
 
-## Getting Started
+## Quick Start
 
-### 1. Clone and install
+### 1. Install dependencies
 
 ```bash
-git clone <repo-url>
-cd saas-starting-template
 npm install
 ```
 
-### 2. Environment variables
+### 2. Configure environment (optional)
 
-Copy `.env.example` to `.env.local` and fill in all values:
+The app works out of the box with mock data. To connect to a real Snowflake instance:
 
 ```bash
 cp .env.example .env.local
 ```
 
-| Variable                             | Description                                 |
-| ------------------------------------ | ------------------------------------------- |
-| `NEXT_PUBLIC_APP_URL`                | Your app URL (e.g. `http://localhost:3000`) |
-| `NEXT_PUBLIC_SUPABASE_URL`           | Supabase project URL                        |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY`      | Supabase anon/public key                    |
-| `SUPABASE_SERVICE_ROLE_KEY`          | Supabase service role key (server only)     |
-| `STRIPE_SECRET_KEY`                  | Stripe secret key                           |
-| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe publishable key                      |
-| `STRIPE_WEBHOOK_SECRET`              | Stripe webhook signing secret               |
-| `STRIPE_PRO_PRICE_ID`                | Stripe price ID for Pro plan                |
-| `STRIPE_ENTERPRISE_PRICE_ID`         | Stripe price ID for Enterprise plan         |
-| `RESEND_API_KEY`                     | Resend API key                              |
-| `RESEND_FROM_EMAIL`                  | Verified sender email                       |
+| Variable | Description | Default |
+|---|---|---|
+| `DEMO_EMAIL` | Login email | `analyst@enfuse.demo` |
+| `DEMO_PASSWORD` | Login password | `enfuse2026` |
+| `SNOWFLAKE_ACCOUNT` | Snowflake account identifier | _(mock mode)_ |
+| `SNOWFLAKE_WAREHOUSE` | Warehouse name | `COMPUTE_WH` |
+| `SNOWFLAKE_DATABASE` | Database name | `SCREENING_DB` |
+| `SNOWFLAKE_SCHEMA` | Schema name | `PUBLIC` |
+| `SNOWFLAKE_API_TOKEN` | JWT token for SQL API | _(mock mode)_ |
 
-### 3. Database setup
-
-Run the migration in your Supabase SQL editor:
-
-```bash
-# Copy contents of supabase/migrations/001_init.sql
-# Paste into Supabase SQL Editor and run
-```
-
-### 4. Stripe setup
-
-1. Create products and prices in Stripe Dashboard
-2. Set the price IDs in your `.env.local`
-3. Set up a webhook endpoint pointing to `/api/stripe/webhook`
-4. Listen for: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`
-
-### 5. Run development server
+### 3. Run the development server
 
 ```bash
 npm run dev
 ```
 
-## Scripts
+### 4. Open the app
 
-| Command              | Description                   |
-| -------------------- | ----------------------------- |
-| `npm run dev`        | Start development server      |
-| `npm run build`      | Build for production          |
-| `npm run lint`       | Run ESLint                    |
-| `npm run lint:fix`   | Fix ESLint errors             |
-| `npm run format`     | Format with Prettier          |
-| `npm run type-check` | Run TypeScript compiler check |
-| `npm run analyze`    | Analyze bundle size           |
+1. Go to [http://localhost:3000](http://localhost:3000)
+2. Click **Launch Demo** or go to `/login`
+3. Sign in with: `analyst@enfuse.demo` / `enfuse2026`
+
+## Demo Walkthrough
+
+1. **Screening Pipeline** (`/screening`) — Run Layer 1 deterministic screening, then trigger Layer 2 AI processing
+2. **Review Queue** (`/queue`) — View cases routed to human review (10-90% confidence)
+3. **Case Review** (`/review/[id]`) — Full three-panel review: field comparison, AI reasoning, and chat assistant
+4. **Audit Log** (`/audit`) — Immutable record of every decision
+
+### Demo Cases
+
+| Customer | Confidence | Routing | Reason |
+|---|---|---|---|
+| Viktor Petrov | 95% | Auto-Restrict | Name + DOB + nationality exact match, multiple sources |
+| John Smith | 6% | Auto-Clear | Common name, 20yr DOB gap, nationality mismatch |
+| Ahmad Al-Hassan | 58% | Human Review | Name/nationality match but 2yr DOB discrepancy |
+| Maria Santos Rodriguez | 42% | Human Review | Partial name match, common name, limited evidence |
+| Chen Wei | 72% | Human Review | Alias exact match + DOB exact, but extremely common name |
+
+## Snowflake Schemas
+
+### Customer Table
+`SNOWFLAKE_SAMPLE_DATA.TPCDS_SF100TCL.CUSTOMER`
+- `C_CUSTOMER_ID`, `C_FIRST_NAME`, `C_LAST_NAME`
+- `C_BIRTH_DAY`, `C_BIRTH_MONTH`, `C_BIRTH_YEAR`
+- `C_BIRTH_COUNTRY`, `C_EMAIL_ADDRESS`
+
+### Sanctions Table
+`GLOBAL_SANCTIONS_DATA.SANCTIONS_DATAFEED`
+- `ENTITY_ID`, `ENTITY_NAME`, `ENTITY_ALIASES`
+- `DOB`, `NATIONALITY_COUNTRY`, `CITIZENSHIP_COUNTRY`
+- `AUTHORITY`, `LIST_NAME`, `ENTITY_NOTES`, `CITATION_LINK`
 
 ## Project Structure
 
 ```
 src/
-├── app/           # Next.js App Router pages
-├── components/    # UI components
-├── lib/           # Third-party client libraries
-├── hooks/         # Custom React hooks
-├── stores/        # Zustand stores
-├── types/         # TypeScript type definitions
-├── utils/         # Utility functions
-└── middleware.ts   # Route protection
+├── app/
+│   ├── (auth)/login/          Login page
+│   ├── (dashboard)/
+│   │   ├── screening/         Screening pipeline dashboard
+│   │   ├── queue/             Human review queue
+│   │   ├── review/[id]/       Individual case review
+│   │   └── audit/             Audit log viewer
+│   └── api/screening/         API routes (run, layer2, queue, review, chat, audit)
+├── components/screening/
+│   ├── FieldComparison.tsx    Side-by-side customer vs watchlist
+│   ├── ReasoningPanel.tsx     AI confidence + reasoning + signals
+│   ├── AIChat.tsx             Embedded Cortex chat assistant
+│   ├── DecisionBar.tsx        Approve/Reject with reason picker
+│   ├── ConfidenceMeter.tsx    Visual confidence bar
+│   ├── SourceList.tsx         Clickable source links
+│   └── ReasonPicker.tsx       Quick-pick reason categories
+├── lib/
+│   ├── snowflake.ts           Snowflake SQL API client
+│   ├── cortex.ts              Snowflake Cortex AI + Brave Search wrapper
+│   ├── auth.ts                Simple cookie-based auth
+│   └── screening/
+│       ├── data.ts            Mock data (5 demo cases)
+│       ├── layer1.ts          Jaro-Winkler scoring engine
+│       ├── layer2.ts          Cortex batch processing
+│       └── routing.ts         Confidence routing logic
+└── types/screening.ts         Domain types
 ```
+
+## Scripts
+
+| Command | Description |
+|---|---|
+| `npm run dev` | Start development server |
+| `npm run build` | Build for production |
+| `npm run lint` | Run ESLint |
+| `npm run type-check` | TypeScript compiler check |
+| `npm run format` | Format with Prettier |
 
 ## Deployment
 
-Deploy to Vercel:
-
 1. Push to GitHub
 2. Connect repo in Vercel
-3. Set all environment variables
+3. Set Snowflake environment variables (or leave blank for mock data)
 4. Deploy
-
-Remember to set your Stripe webhook URL to your production domain.

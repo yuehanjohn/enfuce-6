@@ -3,31 +3,34 @@ import Link from "next/link";
 
 const features = [
   {
-    title: "Authentication",
+    title: "Layer 1 — Hard Rules",
     description:
-      "Complete auth with email, OAuth, password reset, and session management via Supabase.",
+      "Deterministic SQL screening with Jaro-Winkler fuzzy matching, DOB similarity, and nationality scoring. 100k customers to ~300 flags in seconds.",
   },
   {
-    title: "Payments",
+    title: "Layer 2 — AI Analysis",
     description:
-      "Stripe integration with subscriptions, checkout, customer portal, and webhook handling.",
+      "Snowflake Cortex AI + Brave Search researches each flagged case. Auto-restricts high confidence, auto-clears false positives.",
   },
   {
-    title: "Email",
+    title: "Layer 3 — Human Review",
     description:
-      "Transactional emails with React Email templates and Resend for reliable delivery.",
+      "Friction-free analyst dashboard with field comparison, reasoning trail, source links, and embedded AI chat assistant.",
   },
   {
-    title: "Dashboard",
-    description: "Protected dashboard with sidebar navigation, settings, and profile management.",
+    title: "Full Audit Trail",
+    description:
+      "Immutable log of every decision — Layer 1 flags, AI reasoning, human decisions, and chat transcripts. Legally defensible.",
   },
   {
-    title: "Security",
-    description: "CSP headers, RLS policies, Zod validation, CSRF protection, and rate limiting.",
+    title: "Snowflake-Native",
+    description:
+      "All data lives in Snowflake. Uses real schemas: GLOBAL_SANCTIONS_DATA.SANCTIONS_DATAFEED and TPCDS customer records.",
   },
   {
-    title: "Developer Experience",
-    description: "TypeScript strict mode, ESLint, Prettier, Husky hooks, and path aliases.",
+    title: "Ethical AI",
+    description:
+      "Human-in-the-loop for ambiguous cases. AI explains its reasoning with cited sources. No black-box decisions.",
   },
 ];
 
@@ -37,21 +40,16 @@ export default function HomePage() {
       {/* Hero */}
       <section className="flex flex-col items-center justify-center gap-6 px-6 py-24 text-center">
         <h1 className="max-w-3xl text-5xl font-bold leading-tight tracking-tight sm:text-6xl">
-          Ship your SaaS <span className="text-primary">in days, not months</span>
+          Intelligent Sanctions <span className="text-primary">Screening</span>
         </h1>
         <p className="max-w-xl text-lg text-default-500">
-          A production-ready boilerplate with authentication, payments, email, and everything you
-          need to launch your next SaaS product.
+          Three-layer screening pipeline that combines deterministic rules, AI reasoning, and
+          human oversight to screen customers against global sanctions and PEP lists.
         </p>
         <div className="flex gap-4">
-          <Link href="/signup">
+          <Link href="/login">
             <Button variant="primary" size="lg">
-              Get Started
-            </Button>
-          </Link>
-          <Link href="/pricing">
-            <Button variant="outline" size="lg">
-              View Pricing
+              Launch Demo
             </Button>
           </Link>
         </div>
@@ -59,7 +57,7 @@ export default function HomePage() {
 
       {/* Features */}
       <section className="mx-auto max-w-6xl px-6 py-20">
-        <h2 className="mb-12 text-center text-3xl font-bold">Everything you need</h2>
+        <h2 className="mb-12 text-center text-3xl font-bold">Three-Layer Architecture</h2>
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {features.map((feature) => (
             <Card key={feature.title}>
@@ -74,13 +72,13 @@ export default function HomePage() {
 
       {/* CTA */}
       <section className="flex flex-col items-center gap-6 bg-default-100 px-6 py-20 text-center">
-        <h2 className="text-3xl font-bold">Ready to get started?</h2>
+        <h2 className="text-3xl font-bold">Try the Demo</h2>
         <p className="max-w-lg text-default-500">
-          Join thousands of developers who ship faster with our SaaS boilerplate.
+          Walk through a complete screening pipeline — from 100k customers down to individual analyst review.
         </p>
-        <Link href="/signup">
+        <Link href="/login">
           <Button variant="primary" size="lg">
-            Start Building Today
+            Sign In
           </Button>
         </Link>
       </section>
