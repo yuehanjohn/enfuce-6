@@ -1,5 +1,10 @@
 // POST /api/screening/review/decide — Submit analyst decision
 import { NextResponse } from "next/server";
+import {
+  hasSnowflakeConnection,
+  submitDecision as sfSubmitDecision,
+  fetchQueueItemById as sfFetchQueue,
+} from "@/lib/screening/snowflake-queries";
 import { MOCK_QUEUE, decisions, auditLog } from "@/lib/screening/data";
 
 interface DecisionBody {
@@ -28,11 +33,26 @@ export async function POST(request: Request) {
       );
     }
 
-    // Find and update queue item
-    const queueItem = MOCK_QUEUE.find((q) => q.queue_id === body.queue_id);
-    if (!queueItem) {
-      return NextResponse.json({ error: "Queue item not found" }, { status: 404 });
+    if (hasSnowflakeConnection()) {
+      const queueItem = await sfFetchQueue(body.queue_id);
+      if (!queueItem) return NextResponse.json({ error: "Queue item not found" }, { status: 404 });
+
+      await sfSubmitDecision({
+        queueId: body.queue_id,
+        customerId: queueItem.customer_id,
+        resultId: queueItem.result_id,
+        decision: body.decision,
+        reasonCategory: body.reason_category,
+        analystNote: body.analyst_note,
+        chatTranscript: body.chat_transcript,
+      });
+
+      return NextResponse.json({ success: true, source: "snowflake" });
     }
+
+    // Mock mode
+    const queueItem = MOCK_QUEUE.find((q) => q.queue_id === body.queue_id);
+    if (!queueItem) return NextResponse.json({ error: "Queue item not found" }, { status: 404 });
 
     queueItem.status = "DECIDED";
 
@@ -66,10 +86,7 @@ export async function POST(request: Request) {
       created_at: new Date().toISOString(),
     });
 
-    return NextResponse.json({
-      success: true,
-      decision,
-    });
+    return NextResponse.json({ success: true, decision, source: "mock" });
   } catch (error) {
     console.error("Decision submission error:", error);
     return NextResponse.json(

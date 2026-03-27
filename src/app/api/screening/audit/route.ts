@@ -1,11 +1,15 @@
 // GET /api/screening/audit — Return audit log entries
 import { NextResponse } from "next/server";
-import { auditLog, decisions } from "@/lib/screening/data";
-import { MOCK_LAYER2_RESULTS } from "@/lib/screening/data";
+import { hasSnowflakeConnection, fetchAuditLog as sfFetchAudit } from "@/lib/screening/snowflake-queries";
+import { auditLog, decisions, MOCK_LAYER2_RESULTS } from "@/lib/screening/data";
 
 export async function GET() {
-  // Combine auto-decisions from Layer 2 with human decisions from Layer 3
-  // Include pre-seeded audit entries for demo
+  if (hasSnowflakeConnection()) {
+    const entries = await sfFetchAudit();
+    return NextResponse.json({ entries, count: entries.length, decisions: [], source: "snowflake" });
+  }
+
+  // Mock mode — combine seeded + runtime entries
   const seededEntries = MOCK_LAYER2_RESULTS.map((r) => ({
     log_id: `AUDIT-SEED-${r.result_id}`,
     customer_id: r.customer_id,
@@ -26,9 +30,5 @@ export async function GET() {
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
   );
 
-  return NextResponse.json({
-    entries: allEntries,
-    count: allEntries.length,
-    decisions: decisions,
-  });
+  return NextResponse.json({ entries: allEntries, count: allEntries.length, decisions, source: "mock" });
 }

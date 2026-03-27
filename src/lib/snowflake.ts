@@ -1,6 +1,8 @@
 // Snowflake SQL API client via REST
-// Uses JWT auth with keypair or OAuth token
-// All screening data reads/writes go through this client
+// Docs: https://docs.snowflake.com/en/developer-guide/sql-api
+//
+// When SNOWFLAKE_ACCOUNT + SNOWFLAKE_API_TOKEN are set, all queries
+// go to the real Snowflake SQL API. Otherwise, falls back to mock data.
 
 interface SnowflakeConfig {
   account: string;
@@ -14,10 +16,16 @@ function getConfig(): SnowflakeConfig {
   return {
     account: process.env.SNOWFLAKE_ACCOUNT ?? "",
     warehouse: process.env.SNOWFLAKE_WAREHOUSE ?? "COMPUTE_WH",
-    database: process.env.SNOWFLAKE_DATABASE ?? "SCREENING_DB",
+    database: process.env.SNOWFLAKE_DATABASE ?? "ENFUSE_SCREENING",
     schema: process.env.SNOWFLAKE_SCHEMA ?? "PUBLIC",
     token: process.env.SNOWFLAKE_API_TOKEN ?? "",
   };
+}
+
+/** Whether a real Snowflake connection is configured */
+export function isSnowflakeConfigured(): boolean {
+  const config = getConfig();
+  return !!(config.account && config.token);
 }
 
 export interface SnowflakeResult<T = Record<string, unknown>> {
@@ -25,15 +33,57 @@ export interface SnowflakeResult<T = Record<string, unknown>> {
   rowCount: number;
 }
 
+// Snowflake SQL API can return async handles for long queries.
+// We poll until the statement completes.
+const POLL_INTERVAL_MS = 500;
+const MAX_POLL_ATTEMPTS = 120; // 60 seconds max
+
+async function pollForResult(
+  statementHandle: string,
+  config: SnowflakeConfig,
+): Promise<Record<string, unknown>> {
+  const url = `https://${config.account}.snowflakecomputing.com/api/v2/statements/${statementHandle}`;
+
+  for (let i = 0; i < MAX_POLL_ATTEMPTS; i++) {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${config.token}`,
+        "X-Snowflake-Authorization-Token-Type": "KEYPAIR_JWT",
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Snowflake poll failed (${response.status}): ${errorText}`);
+    }
+
+    const result = await response.json();
+
+    // Check execution status
+    if (result.code === "090001") {
+      // Still running — wait and retry
+      await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+      continue;
+    }
+
+    return result;
+  }
+
+  throw new Error(`Snowflake query timed out after ${MAX_POLL_ATTEMPTS * POLL_INTERVAL_MS}ms`);
+}
+
+/**
+ * Execute a SQL query against Snowflake SQL API.
+ * Returns empty result set if Snowflake is not configured (mock mode).
+ */
 export async function executeQuery<T = Record<string, unknown>>(
   sql: string,
   bindings?: Record<string, string | number | boolean | null>,
 ): Promise<SnowflakeResult<T>> {
   const config = getConfig();
 
-  // If no token configured, we're in demo mode — use mock data
-  if (!config.token) {
-    console.warn("[Snowflake] No API token configured — using mock data layer");
+  if (!isSnowflakeConfigured()) {
     return { rows: [], rowCount: 0 };
   }
 
@@ -45,6 +95,7 @@ export async function executeQuery<T = Record<string, unknown>>(
     warehouse: config.warehouse,
     database: config.database,
     schema: config.schema,
+    resultSetMetaData: { format: "jsonv2" },
   };
 
   if (bindings) {
@@ -71,9 +122,13 @@ export async function executeQuery<T = Record<string, unknown>>(
     throw new Error(`Snowflake query failed (${response.status}): ${errorText}`);
   }
 
-  const result = await response.json();
+  let result = await response.json();
 
-  // Snowflake SQL API returns data in a specific format
+  // If async execution, poll for completion
+  if (result.code === "090001" && result.statementHandle) {
+    result = await pollForResult(result.statementHandle, config);
+  }
+
   // Map column names to row values
   const columns: string[] = (result.resultSetMetaData?.rowType ?? []).map(
     (col: { name: string }) => col.name.toLowerCase(),
@@ -83,7 +138,18 @@ export async function executeQuery<T = Record<string, unknown>>(
   const rows = data.map((row: string[]) => {
     const obj: Record<string, unknown> = {};
     columns.forEach((col, i) => {
-      obj[col] = row[i];
+      // Parse VARIANT/ARRAY columns as JSON
+      const colMeta = result.resultSetMetaData?.rowType?.[i];
+      const rawVal = row[i];
+      if (rawVal != null && colMeta && (colMeta.type === "variant" || colMeta.type === "array")) {
+        try {
+          obj[col] = JSON.parse(rawVal);
+        } catch {
+          obj[col] = rawVal;
+        }
+      } else {
+        obj[col] = rawVal;
+      }
     });
     return obj as T;
   });
@@ -91,7 +157,8 @@ export async function executeQuery<T = Record<string, unknown>>(
   return { rows, rowCount: rows.length };
 }
 
-// Helper to execute multiple statements (for inserts/updates)
-export async function executeStatement(sql: string): Promise<void> {
-  await executeQuery(sql);
+/** Execute a write statement (INSERT/UPDATE/DELETE). Returns affected row count. */
+export async function executeStatement(sql: string): Promise<number> {
+  const result = await executeQuery(sql);
+  return result.rowCount;
 }

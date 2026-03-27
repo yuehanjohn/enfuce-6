@@ -1,5 +1,6 @@
 // GET /api/screening/queue — Return pending review queue
 import { NextResponse } from "next/server";
+import { hasSnowflakeConnection, fetchQueue as sfFetchQueue } from "@/lib/screening/snowflake-queries";
 import {
   MOCK_QUEUE,
   findCustomer,
@@ -8,6 +9,12 @@ import {
 } from "@/lib/screening/data";
 
 export async function GET() {
+  if (hasSnowflakeConnection()) {
+    const queue = await sfFetchQueue();
+    return NextResponse.json({ queue, count: queue.length, source: "snowflake" });
+  }
+
+  // Mock mode
   const enrichedQueue = MOCK_QUEUE.filter((q) => q.status !== "DECIDED").map((q) => {
     const customer = findCustomer(q.customer_id);
     const watchlist = findSanctionsEntry(q.entity_id);
@@ -18,13 +25,10 @@ export async function GET() {
       customer_nationality: customer?.nationality ?? "",
       customer_dob: customer?.dob ?? "",
       entity_name: watchlist?.entity_name ?? "Unknown",
-      list_source: watchlist ? `${watchlist.list_name} (${watchlist.authority})` : "",
+      list_source: watchlist ? `${watchlist.authority} - ${watchlist.list_name}` : "",
       reasoning_summary: layer2?.reasoning?.slice(0, 150) ?? "",
     };
   });
 
-  return NextResponse.json({
-    queue: enrichedQueue,
-    count: enrichedQueue.length,
-  });
+  return NextResponse.json({ queue: enrichedQueue, count: enrichedQueue.length, source: "mock" });
 }

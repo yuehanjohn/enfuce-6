@@ -3,6 +3,14 @@ import { NextResponse } from "next/server";
 import { getChatResponse, type ChatMessage } from "@/lib/cortex";
 import type { ReviewCase } from "@/types/screening";
 import {
+  hasSnowflakeConnection,
+  fetchQueueItemById as sfFetchQueue,
+  fetchCustomerById as sfFetchCustomer,
+  fetchSanctionsEntryById as sfFetchSanctions,
+  fetchLayer2ByResultId as sfFetchLayer2,
+  fetchLayer1ByCustomer as sfFetchLayer1,
+} from "@/lib/screening/snowflake-queries";
+import {
   findQueueItem,
   findCustomer,
   findSanctionsEntry,
@@ -15,43 +23,50 @@ interface ChatBody {
   messages: ChatMessage[];
 }
 
+async function buildReviewCase(queueId: string): Promise<ReviewCase | null> {
+  if (hasSnowflakeConnection()) {
+    const queue = await sfFetchQueue(queueId);
+    if (!queue) return null;
+    const [customer, watchlist, layer2, layer1] = await Promise.all([
+      sfFetchCustomer(queue.customer_id),
+      sfFetchSanctions(queue.entity_id),
+      sfFetchLayer2(queue.result_id),
+      sfFetchLayer1(queue.customer_id),
+    ]);
+    if (!customer || !watchlist || !layer2 || !layer1) return null;
+    return { queue, customer, watchlist, layer1, layer2 };
+  }
+
+  // Mock mode
+  const queue = findQueueItem(queueId);
+  if (!queue) return null;
+  const customer = findCustomer(queue.customer_id);
+  const watchlist = findSanctionsEntry(queue.entity_id);
+  const layer2 = findLayer2Result(queue.result_id);
+  const layer1 = findLayer1ByCustomer(queue.customer_id);
+  if (!customer || !watchlist || !layer2 || !layer1) return null;
+  return { queue, customer, watchlist, layer1, layer2 };
+}
+
 export async function POST(request: Request) {
   try {
     const body: ChatBody = await request.json();
 
     if (!body.queue_id || !body.messages?.length) {
-      return NextResponse.json(
-        { error: "Missing queue_id or messages" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "Missing queue_id or messages" }, { status: 400 });
     }
 
-    const queue = findQueueItem(body.queue_id);
-    if (!queue) {
-      return NextResponse.json({ error: "Queue item not found" }, { status: 404 });
+    const reviewCase = await buildReviewCase(body.queue_id);
+    if (!reviewCase) {
+      return NextResponse.json({ error: "Case not found" }, { status: 404 });
     }
-
-    const customer = findCustomer(queue.customer_id);
-    const watchlist = findSanctionsEntry(queue.entity_id);
-    const layer2 = findLayer2Result(queue.result_id);
-    const layer1 = findLayer1ByCustomer(queue.customer_id);
-
-    if (!customer || !watchlist || !layer2 || !layer1) {
-      return NextResponse.json({ error: "Incomplete case data" }, { status: 404 });
-    }
-
-    const reviewCase: ReviewCase = { queue, customer, watchlist, layer1, layer2 };
 
     const responseText = await getChatResponse(reviewCase, body.messages);
 
-    // Send as SSE format for compatibility with the frontend streaming handler
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       start(controller) {
-        // Send the full response as a single chunk
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ text: responseText })}\n\n`),
-        );
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: responseText })}\n\n`));
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
         controller.close();
       },
@@ -66,9 +81,6 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("Chat error:", error);
-    return NextResponse.json(
-      { error: "Chat failed", details: String(error) },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "Chat failed", details: String(error) }, { status: 500 });
   }
 }
