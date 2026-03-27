@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Avatar, Dropdown } from "@heroui/react";
+import { Avatar, Dropdown } from "@heroui/react";
 import { useRouter } from "next/navigation";
 
 export function DashboardHeader() {
@@ -20,11 +20,9 @@ export function DashboardHeader() {
       <div className="flex-1" />
       <Dropdown>
         <Dropdown.Trigger>
-          <Button variant="ghost" isIconOnly>
-            <Avatar size="sm">
-              <Avatar.Fallback>A</Avatar.Fallback>
-            </Avatar>
-          </Button>
+          <Avatar size="sm">
+            <Avatar.Fallback>A</Avatar.Fallback>
+          </Avatar>
         </Dropdown.Trigger>
         <Dropdown.Popover>
           <Dropdown.Menu>
