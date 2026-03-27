@@ -1,36 +1,105 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SaaS Starting Template
+
+A production-ready SaaS boilerplate built with Next.js 16, Supabase, Stripe, and HeroUI.
+
+## Stack
+
+- **Framework**: Next.js 16 (App Router, TypeScript strict mode)
+- **UI**: HeroUI v3 + Tailwind CSS v4
+- **Auth + DB**: Supabase (SSR-safe, RLS policies)
+- **Payments**: Stripe (Checkout, Webhooks, Customer Portal)
+- **Email**: Resend + React Email templates
+- **Validation**: Zod
+- **State**: Zustand (client) + React Query (server state)
+- **Forms**: React Hook Form + Zod resolvers
 
 ## Getting Started
 
-First, run the development server:
+### 1. Clone and install
+
+```bash
+git clone <repo-url>
+cd saas-starting-template
+npm install
+```
+
+### 2. Environment variables
+
+Copy `.env.example` to `.env.local` and fill in all values:
+
+```bash
+cp .env.example .env.local
+```
+
+| Variable                             | Description                                 |
+| ------------------------------------ | ------------------------------------------- |
+| `NEXT_PUBLIC_APP_URL`                | Your app URL (e.g. `http://localhost:3000`) |
+| `NEXT_PUBLIC_SUPABASE_URL`           | Supabase project URL                        |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY`      | Supabase anon/public key                    |
+| `SUPABASE_SERVICE_ROLE_KEY`          | Supabase service role key (server only)     |
+| `STRIPE_SECRET_KEY`                  | Stripe secret key                           |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe publishable key                      |
+| `STRIPE_WEBHOOK_SECRET`              | Stripe webhook signing secret               |
+| `STRIPE_PRO_PRICE_ID`                | Stripe price ID for Pro plan                |
+| `STRIPE_ENTERPRISE_PRICE_ID`         | Stripe price ID for Enterprise plan         |
+| `RESEND_API_KEY`                     | Resend API key                              |
+| `RESEND_FROM_EMAIL`                  | Verified sender email                       |
+
+### 3. Database setup
+
+Run the migration in your Supabase SQL editor:
+
+```bash
+# Copy contents of supabase/migrations/001_init.sql
+# Paste into Supabase SQL Editor and run
+```
+
+### 4. Stripe setup
+
+1. Create products and prices in Stripe Dashboard
+2. Set the price IDs in your `.env.local`
+3. Set up a webhook endpoint pointing to `/api/stripe/webhook`
+4. Listen for: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`
+
+### 5. Run development server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Scripts
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Command              | Description                   |
+| -------------------- | ----------------------------- |
+| `npm run dev`        | Start development server      |
+| `npm run build`      | Build for production          |
+| `npm run lint`       | Run ESLint                    |
+| `npm run lint:fix`   | Fix ESLint errors             |
+| `npm run format`     | Format with Prettier          |
+| `npm run type-check` | Run TypeScript compiler check |
+| `npm run analyze`    | Analyze bundle size           |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Project Structure
 
-## Learn More
+```
+src/
+├── app/           # Next.js App Router pages
+├── components/    # UI components
+├── lib/           # Third-party client libraries
+├── hooks/         # Custom React hooks
+├── stores/        # Zustand stores
+├── types/         # TypeScript type definitions
+├── utils/         # Utility functions
+└── middleware.ts   # Route protection
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Deployment
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Deploy to Vercel:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. Push to GitHub
+2. Connect repo in Vercel
+3. Set all environment variables
+4. Deploy
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Remember to set your Stripe webhook URL to your production domain.
