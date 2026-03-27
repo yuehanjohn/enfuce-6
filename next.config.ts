@@ -40,7 +40,7 @@ const securityHeaders = [
       "img-src 'self' blob: data: https://*.supabase.co",
       "font-src 'self'",
       "frame-src https://js.stripe.com https://hooks.stripe.com",
-      "connect-src 'self' https://*.supabase.co https://api.stripe.com",
+      "connect-src 'self' https://*.supabase.co https://api.stripe.com https://*.snowflakecomputing.com",
       "object-src 'none'",
       "base-uri 'self'",
       "form-action 'self'",

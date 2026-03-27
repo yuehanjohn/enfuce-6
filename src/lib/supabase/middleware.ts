@@ -27,26 +27,14 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Protect dashboard routes
-  if (!user && request.nextUrl.pathname.startsWith("/dashboard")) {
+  // Protected route prefixes
+  const protectedPaths = ["/dashboard", "/settings", "/onboarding", "/screening", "/queue", "/review", "/audit"];
+  const isProtected = protectedPaths.some((p) => request.nextUrl.pathname.startsWith(p));
+
+  if (!user && isProtected) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("redirectTo", request.nextUrl.pathname);
-    return NextResponse.redirect(url);
-  }
-
-  // Protect settings routes
-  if (!user && request.nextUrl.pathname.startsWith("/settings")) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("redirectTo", request.nextUrl.pathname);
-    return NextResponse.redirect(url);
-  }
-
-  // Protect onboarding routes
-  if (!user && request.nextUrl.pathname.startsWith("/onboarding")) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
