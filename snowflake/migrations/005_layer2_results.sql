@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS LAYER2_RESULTS (
     entity_id           VARCHAR(100)    NOT NULL,
     ai_confidence       FLOAT           NOT NULL,       -- 0-100
     routing             VARCHAR(20)     NOT NULL,       -- AUTO_RESTRICT | AUTO_CLEAR | HUMAN_REVIEW
-    reasoning           TEXT            NOT NULL,
+    reasoning           VARCHAR         NOT NULL,
     matching_signals    VARIANT,                        -- JSON array of strings
     conflicting_signals VARIANT,                        -- JSON array of strings
     sources             VARIANT,                        -- JSON array of {label, url}
@@ -24,6 +24,3 @@ CREATE TABLE IF NOT EXISTS LAYER2_RESULTS (
     CONSTRAINT fk_l2_flag FOREIGN KEY (flag_id)
         REFERENCES SCREENING.LAYER1_FLAGS(flag_id)
 );
-
-CREATE INDEX IF NOT EXISTS idx_l2_customer ON SCREENING.LAYER2_RESULTS(customer_id);
-CREATE INDEX IF NOT EXISTS idx_l2_routing ON SCREENING.LAYER2_RESULTS(routing);

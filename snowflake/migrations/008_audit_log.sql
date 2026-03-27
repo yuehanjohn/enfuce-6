@@ -15,13 +15,9 @@ CREATE TABLE IF NOT EXISTS LOG (
     event_type          VARCHAR(100)    NOT NULL,
     payload             VARIANT         NOT NULL,       -- Full JSON snapshot
     analyst_id          VARCHAR(100),
-    ai_chat_transcript  TEXT,
+    ai_chat_transcript  VARCHAR,
     created_at          TIMESTAMP_NTZ   DEFAULT CURRENT_TIMESTAMP()
 );
 
 -- Clustering key for time-series queries
 ALTER TABLE AUDIT.LOG CLUSTER BY (created_at);
-
-CREATE INDEX IF NOT EXISTS idx_audit_customer ON AUDIT.LOG(customer_id);
-CREATE INDEX IF NOT EXISTS idx_audit_layer ON AUDIT.LOG(layer);
-CREATE INDEX IF NOT EXISTS idx_audit_event ON AUDIT.LOG(event_type);

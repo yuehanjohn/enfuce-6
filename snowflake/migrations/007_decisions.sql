@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS RESTRICTIONS (
     trigger_type        VARCHAR(10)     NOT NULL,       -- AUTO | HUMAN
     analyst_id          VARCHAR(100),
     reason_category     VARCHAR(500),
-    analyst_note        TEXT,
+    analyst_note        VARCHAR,
     decided_at          TIMESTAMP_NTZ   DEFAULT CURRENT_TIMESTAMP()
 );
 
@@ -25,9 +25,6 @@ CREATE TABLE IF NOT EXISTS CLEARANCES (
     trigger_type        VARCHAR(10)     NOT NULL,       -- AUTO | HUMAN
     analyst_id          VARCHAR(100),
     reason_category     VARCHAR(500),
-    analyst_note        TEXT,
+    analyst_note        VARCHAR,
     decided_at          TIMESTAMP_NTZ   DEFAULT CURRENT_TIMESTAMP()
 );
-
-CREATE INDEX IF NOT EXISTS idx_r_customer ON DECISIONS.RESTRICTIONS(customer_id);
-CREATE INDEX IF NOT EXISTS idx_c_customer ON DECISIONS.CLEARANCES(customer_id);
