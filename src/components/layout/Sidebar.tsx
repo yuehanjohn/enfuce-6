@@ -39,7 +39,7 @@ export function Sidebar() {
     <aside className="hidden md:flex md:w-64 md:flex-col border-r border-default-200 bg-background">
       <div className="flex h-16 items-center px-6 border-b border-default-200">
         <Link href="/dashboard" className="text-xl font-bold">
-          Enfuse
+          Enfuce
         </Link>
       </div>
       <nav className="flex-1 space-y-1 p-4">

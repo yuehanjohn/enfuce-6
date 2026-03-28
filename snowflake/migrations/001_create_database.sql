@@ -1,5 +1,5 @@
 -- ============================================================
--- Enfuse Sanctions & PEP Screening — Snowflake Schema Setup
+-- Enfuce Sanctions & PEP Screening — Snowflake Schema Setup
 -- ============================================================
 -- Run this first to create the database and schemas.
 -- Requires ACCOUNTADMIN or equivalent privileges.

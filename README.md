@@ -1,4 +1,4 @@
-# Enfuse — Sanctions & PEP Screening Triage Tool
+# Enfuce — Sanctions & PEP Screening Triage Tool
 
 Intelligent three-layer screening pipeline that combines deterministic rules, Snowflake Cortex AI reasoning, and human-in-the-loop review to screen customers against global sanctions and PEP lists.
 
@@ -22,14 +22,14 @@ Intelligent three-layer screening pipeline that combines deterministic rules, Sn
 
 ## Stack
 
-| Layer | Technology |
-|---|---|
-| Framework | Next.js 16 (App Router, TypeScript) |
-| UI | HeroUI v3 + Tailwind CSS v4 |
-| Data Warehouse | Snowflake (SQL API) |
-| AI | Snowflake Cortex (`COMPLETE()`) |
-| Web Search | Brave Search via Cortex (`SEARCH_PREVIEW()`) |
-| Auth | Cookie-based demo auth |
+| Layer          | Technology                                   |
+| -------------- | -------------------------------------------- |
+| Framework      | Next.js 16 (App Router, TypeScript)          |
+| UI             | HeroUI v3 + Tailwind CSS v4                  |
+| Data Warehouse | Snowflake (SQL API)                          |
+| AI             | Snowflake Cortex (`COMPLETE()`)              |
+| Web Search     | Brave Search via Cortex (`SEARCH_PREVIEW()`) |
+| Auth           | Cookie-based demo auth                       |
 
 ---
 
@@ -43,7 +43,7 @@ npm run dev
 ```
 
 1. Open [http://localhost:3000](http://localhost:3000)
-2. Sign in with `analyst@enfuse.demo` / `enfuse2026`
+2. Sign in with `analyst@enfuce.demo` / `enfuce2026`
 3. Navigate to **Screening** to run the pipeline
 
 ---
@@ -124,8 +124,8 @@ cp .env.example .env.local
 Edit `.env.local`:
 
 ```env
-DEMO_EMAIL=analyst@enfuse.demo
-DEMO_PASSWORD=enfuse2026
+DEMO_EMAIL=analyst@enfuce.demo
+DEMO_PASSWORD=enfuce2026
 
 SNOWFLAKE_ACCOUNT=your-org-your-account    # e.g. myorg-myaccount
 SNOWFLAKE_WAREHOUSE=COMPUTE_WH
@@ -210,13 +210,13 @@ ENFUSE_SCREENING
 
 ### Demo Cases
 
-| Customer | Confidence | Routing | Reason |
-|---|---|---|---|
-| Viktor Petrov | 95% | Auto-Restrict | Name + DOB + nationality exact match, multiple sources |
-| John Smith | 6% | Auto-Clear | Common name, 20yr DOB gap, nationality mismatch |
-| Ahmad Al-Hassan | 58% | Human Review | Name/nationality match but 2yr DOB discrepancy |
-| Maria Santos Rodriguez | 42% | Human Review | Partial name match, common name, limited evidence |
-| Chen Wei | 72% | Human Review | Alias exact match + DOB exact, but extremely common name |
+| Customer               | Confidence | Routing       | Reason                                                   |
+| ---------------------- | ---------- | ------------- | -------------------------------------------------------- |
+| Viktor Petrov          | 95%        | Auto-Restrict | Name + DOB + nationality exact match, multiple sources   |
+| John Smith             | 6%         | Auto-Clear    | Common name, 20yr DOB gap, nationality mismatch          |
+| Ahmad Al-Hassan        | 58%        | Human Review  | Name/nationality match but 2yr DOB discrepancy           |
+| Maria Santos Rodriguez | 42%        | Human Review  | Partial name match, common name, limited evidence        |
+| Chen Wei               | 72%        | Human Review  | Alias exact match + DOB exact, but extremely common name |
 
 ---
 
@@ -252,10 +252,10 @@ ENFUSE_SCREENING
 
 ## Scripts
 
-| Command | Description |
-|---|---|
-| `npm run dev` | Start development server |
-| `npm run build` | Build for production |
-| `npm run lint` | Run ESLint |
+| Command              | Description               |
+| -------------------- | ------------------------- |
+| `npm run dev`        | Start development server  |
+| `npm run build`      | Build for production      |
+| `npm run lint`       | Run ESLint                |
 | `npm run type-check` | TypeScript compiler check |
-| `npm run format` | Format with Prettier |
+| `npm run format`     | Format with Prettier      |

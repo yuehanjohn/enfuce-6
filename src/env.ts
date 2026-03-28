@@ -2,8 +2,8 @@ import { z } from "zod";
 
 const envSchema = z.object({
   // Demo auth credentials
-  DEMO_EMAIL: z.string().email().default("analyst@enfuse.demo"),
-  DEMO_PASSWORD: z.string().min(1).default("enfuse2026"),
+  DEMO_EMAIL: z.string().email().default("analyst@enfuce.demo"),
+  DEMO_PASSWORD: z.string().min(1).default("enfuce2026"),
 
   // Snowflake (optional — falls back to mock data when not set)
   SNOWFLAKE_ACCOUNT: z.string().optional(),

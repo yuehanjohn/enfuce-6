@@ -3,13 +3,13 @@
 
 import { cookies } from "next/headers";
 
-const SESSION_COOKIE = "enfuse_session";
+const SESSION_COOKIE = "enfuce_session";
 const SESSION_VALUE = "authenticated";
 
 export function getDemoCredentials() {
   return {
-    email: process.env.DEMO_EMAIL ?? "analyst@enfuse.demo",
-    password: process.env.DEMO_PASSWORD ?? "enfuse2026",
+    email: process.env.DEMO_EMAIL ?? "analyst@enfuce.demo",
+    password: process.env.DEMO_PASSWORD ?? "enfuce2026",
   };
 }
 

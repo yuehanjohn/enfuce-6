@@ -41,15 +41,13 @@ export default function LoginPage() {
     <Card>
       <Card.Header>
         <div className="w-full text-center">
-          <h1 className="text-2xl font-bold">Enfuse</h1>
+          <h1 className="text-2xl font-bold">Enfuce</h1>
           <p className="text-sm text-default-500 mt-1">Sanctions & PEP Screening Platform</p>
         </div>
       </Card.Header>
       <Card.Content>
         <form onSubmit={handleSubmit} className="space-y-4">
-          {error && (
-            <div className="rounded-lg bg-danger-50 p-3 text-sm text-danger">{error}</div>
-          )}
+          {error && <div className="rounded-lg bg-danger-50 p-3 text-sm text-danger">{error}</div>}
 
           <div className="space-y-1">
             <label className="text-sm font-medium">Email</label>
@@ -57,7 +55,7 @@ export default function LoginPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="analyst@enfuse.demo"
+              placeholder="analyst@enfuce.demo"
               required
               className="w-full rounded-lg border border-default-200 bg-default-50 px-3 py-2 text-sm focus:border-primary focus:outline-none"
             />
@@ -80,7 +78,7 @@ export default function LoginPage() {
           </Button>
 
           <p className="text-xs text-default-400 text-center">
-            Demo credentials: analyst@enfuse.demo / enfuse2026
+            Demo credentials: analyst@enfuce.demo / enfuce2026
           </p>
         </form>
       </Card.Content>

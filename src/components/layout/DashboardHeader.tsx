@@ -15,7 +15,7 @@ export function DashboardHeader() {
   return (
     <header className="flex h-16 items-center justify-between border-b border-default-200 px-6">
       <div className="md:hidden">
-        <span className="text-xl font-bold">Enfuse</span>
+        <span className="text-xl font-bold">Enfuce</span>
       </div>
       <div className="flex-1" />
       <Dropdown>

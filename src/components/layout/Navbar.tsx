@@ -12,7 +12,7 @@ export function Navbar() {
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
         <div className="flex items-center gap-8">
           <Link href="/" className="text-xl font-bold">
-            Enfuse
+            Enfuce
           </Link>
           <div className="hidden items-center gap-6 sm:flex">
             <Link

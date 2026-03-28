@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Enfuse — Sanctions & PEP Screening",
-    template: "%s | Enfuse",
+    default: "Enfuce — Sanctions & PEP Screening",
+    template: "%s | Enfuce",
   },
   description: "Intelligent sanctions and PEP screening triage tool with three-layer pipeline",
 };

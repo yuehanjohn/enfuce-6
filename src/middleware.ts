@@ -1,9 +1,17 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-const SESSION_COOKIE = "enfuse_session";
+const SESSION_COOKIE = "enfuce_session";
 const SESSION_VALUE = "authenticated";
 
-const protectedPaths = ["/dashboard", "/settings", "/onboarding", "/screening", "/queue", "/review", "/audit"];
+const protectedPaths = [
+  "/dashboard",
+  "/settings",
+  "/onboarding",
+  "/screening",
+  "/queue",
+  "/review",
+  "/audit",
+];
 
 export function middleware(request: NextRequest) {
   const session = request.cookies.get(SESSION_COOKIE)?.value;
