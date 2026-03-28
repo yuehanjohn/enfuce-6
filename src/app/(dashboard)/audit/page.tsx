@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Card, Button } from "@heroui/react";
 import Link from "next/link";
 
@@ -40,10 +40,14 @@ export default function AuditPage() {
 
   function getLayerLabel(layer: number) {
     switch (layer) {
-      case 1: return "Layer 1 — Hard Rules";
-      case 2: return "Layer 2 — AI Analysis";
-      case 3: return "Layer 3 — Human Decision";
-      default: return `Layer ${layer}`;
+      case 1:
+        return "Layer 1 — Hard Rules";
+      case 2:
+        return "Layer 2 — AI Analysis";
+      case 3:
+        return "Layer 3 — Human Decision";
+      default:
+        return `Layer ${layer}`;
     }
   }
 
@@ -95,11 +99,12 @@ export default function AuditPage() {
                 </thead>
                 <tbody>
                   {entries.map((entry) => (
-                    <>
+                    <React.Fragment key={entry.log_id}>
                       <tr
-                        key={entry.log_id}
                         className="border-b border-default-100 hover:bg-default-50 cursor-pointer"
-                        onClick={() => setExpandedId(expandedId === entry.log_id ? null : entry.log_id)}
+                        onClick={() =>
+                          setExpandedId(expandedId === entry.log_id ? null : entry.log_id)
+                        }
                       >
                         <td className="px-4 py-3 text-xs text-default-500 whitespace-nowrap">
                           {new Date(entry.created_at).toLocaleString()}
@@ -108,14 +113,14 @@ export default function AuditPage() {
                           <span className="text-xs">{getLayerLabel(entry.layer)}</span>
                         </td>
                         <td className="px-4 py-3">
-                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getEventColor(entry.event_type)}`}>
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getEventColor(entry.event_type)}`}
+                          >
                             {entry.event_type}
                           </span>
                         </td>
                         <td className="px-4 py-3 font-medium">{entry.customer_id}</td>
-                        <td className="px-4 py-3 text-default-500">
-                          {entry.analyst_id || "—"}
-                        </td>
+                        <td className="px-4 py-3 text-default-500">{entry.analyst_id || "—"}</td>
                         <td className="px-4 py-3">
                           <Button variant="ghost" size="sm">
                             {expandedId === entry.log_id ? "Hide" : "View"}
@@ -130,7 +135,9 @@ export default function AuditPage() {
                             </pre>
                             {entry.ai_chat_transcript && (
                               <div className="mt-3">
-                                <p className="text-xs font-medium text-default-500 mb-1">Chat Transcript</p>
+                                <p className="text-xs font-medium text-default-500 mb-1">
+                                  Chat Transcript
+                                </p>
                                 <pre className="text-xs overflow-x-auto whitespace-pre-wrap rounded-lg bg-default-100 p-4">
                                   {entry.ai_chat_transcript}
                                 </pre>
@@ -139,7 +146,7 @@ export default function AuditPage() {
                           </td>
                         </tr>
                       )}
-                    </>
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>

@@ -40,7 +40,7 @@ const MAX_POLL_ATTEMPTS = 120; // 60 seconds max
 
 async function pollForResult(
   statementHandle: string,
-  config: SnowflakeConfig,
+  config: SnowflakeConfig
 ): Promise<Record<string, unknown>> {
   const url = `https://${config.account}.snowflakecomputing.com/api/v2/statements/${statementHandle}`;
 
@@ -53,21 +53,18 @@ async function pollForResult(
       },
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Snowflake poll failed (${response.status}): ${errorText}`);
-    }
-
-    const result = await response.json();
-
-    // Check execution status
-    if (result.code === "090001") {
+    if (response.status === 202) {
       // Still running — wait and retry
       await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
       continue;
     }
 
-    return result;
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Snowflake poll failed (${response.status}): ${errorText}`);
+    }
+
+    return await response.json();
   }
 
   throw new Error(`Snowflake query timed out after ${MAX_POLL_ATTEMPTS * POLL_INTERVAL_MS}ms`);
@@ -79,7 +76,7 @@ async function pollForResult(
  */
 export async function executeQuery<T = Record<string, unknown>>(
   sql: string,
-  bindings?: Record<string, string | number | boolean | null>,
+  bindings?: Record<string, string | number | boolean | null>
 ): Promise<SnowflakeResult<T>> {
   const config = getConfig();
 
@@ -103,7 +100,7 @@ export async function executeQuery<T = Record<string, unknown>>(
       Object.entries(bindings).map(([key, value]) => [
         key,
         { type: typeof value === "number" ? "FIXED" : "TEXT", value: String(value ?? "") },
-      ]),
+      ])
     );
   }
 
@@ -117,21 +114,23 @@ export async function executeQuery<T = Record<string, unknown>>(
     body: JSON.stringify(body),
   });
 
-  if (!response.ok) {
+  // HTTP 202 = async execution in progress, poll for result
+  let result: Record<string, unknown>;
+  if (response.status === 202) {
+    const interim = await response.json();
+    const handle = interim.statementHandle as string | undefined;
+    if (!handle) throw new Error("Snowflake returned 202 with no statementHandle");
+    result = await pollForResult(handle, config);
+  } else if (!response.ok) {
     const errorText = await response.text();
     throw new Error(`Snowflake query failed (${response.status}): ${errorText}`);
-  }
-
-  let result = await response.json();
-
-  // If async execution, poll for completion
-  if (result.code === "090001" && result.statementHandle) {
-    result = await pollForResult(result.statementHandle, config);
+  } else {
+    result = await response.json();
   }
 
   // Map column names to row values
-  const columns: string[] = (result.resultSetMetaData?.rowType ?? []).map(
-    (col: { name: string }) => col.name.toLowerCase(),
+  const columns: string[] = (result.resultSetMetaData?.rowType ?? []).map((col: { name: string }) =>
+    col.name.toLowerCase()
   );
   const data: string[][] = result.data ?? [];
 
