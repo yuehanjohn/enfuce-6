@@ -9,6 +9,7 @@ interface DecisionBarProps {
   customerName: string;
   onDecisionSubmitted?: () => void;
   chatTranscript?: string;
+  className?: string;
 }
 
 export function DecisionBar({
@@ -16,6 +17,7 @@ export function DecisionBar({
   customerName,
   onDecisionSubmitted,
   chatTranscript,
+  className,
 }: DecisionBarProps) {
   const [decision, setDecision] = useState<"APPROVE" | "REJECT" | null>(null);
   const [reason, setReason] = useState("");
@@ -26,7 +28,8 @@ export function DecisionBar({
   const [submitted, setSubmitted] = useState(false);
 
   const effectiveReason = reason === "Other" ? `Other: ${otherText}` : reason;
-  const isValid = decision && reason && note.length >= 10 && (reason !== "Other" || otherText.length > 0);
+  const isValid =
+    decision && reason && note.length >= 10 && (reason !== "Other" || otherText.length > 0);
 
   async function handleSubmit() {
     if (!isValid) return;
@@ -59,16 +62,30 @@ export function DecisionBar({
 
   if (submitted) {
     return (
-      <Card>
-        <Card.Content>
-          <div className="flex items-center gap-3 py-4">
-            <svg className="h-8 w-8 text-success" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+      <Card className={className}>
+        <Card.Content className="flex h-full min-h-0 flex-col gap-5 overflow-y-auto p-5">
+          <div className="space-y-4">
+            <p className="text-xl font-semibold text-foreground">Analyst Decision</p>
+          </div>
+          <div className="flex items-center gap-3 rounded-xl border border-success/20 bg-success-50 px-4 py-4">
+            <svg
+              className="h-8 w-8 text-success"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={2}
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+              />
             </svg>
             <div>
-              <p className="font-semibold">Decision Submitted</p>
-              <p className="text-sm text-default-500">
-                {customerName} — {decision === "APPROVE" ? "Cleared" : "Restricted"} — {effectiveReason}
+              <p className="font-semibold text-success">Decision Submitted</p>
+              <p className="text-sm text-default-600">
+                {customerName} - {decision === "APPROVE" ? "Cleared" : "Restricted"} -{" "}
+                {effectiveReason}
               </p>
             </div>
           </div>
@@ -79,73 +96,127 @@ export function DecisionBar({
 
   return (
     <>
-      <Card>
-        <Card.Header>
-          <Card.Title>Analyst Decision</Card.Title>
-        </Card.Header>
-        <Card.Content className="space-y-4">
-          {/* Decision buttons */}
-          <div className="flex gap-3">
-            <Button
-              className={`flex-1 ${decision === "APPROVE" ? "bg-success text-success-foreground" : ""}`}
-              variant={decision === "APPROVE" ? "primary" : "outline"}
-              onPress={() => { setDecision("APPROVE"); setReason(""); }}
-            >
-              <svg className="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-              </svg>
-              Approve (Clear)
-            </Button>
-            <Button
-              className="flex-1"
-              variant={decision === "REJECT" ? "danger" : "outline"}
-              onPress={() => { setDecision("REJECT"); setReason(""); }}
-            >
-              <svg className="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="m9.75 9.75 4.5 4.5m0-4.5-4.5 4.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-              </svg>
-              Reject (Restrict)
-            </Button>
+      <Card className={className}>
+        <Card.Content className="flex h-full min-h-0 flex-col gap-5 overflow-y-auto p-5">
+          <div className="space-y-4">
+            <p className="text-xl font-semibold text-foreground">Analyst Decision</p>
+
+            <div className="flex items-center justify-between gap-4 text-sm">
+              <span className="font-semibold text-default-700">
+                {decision === "APPROVE"
+                  ? "Approve (Clear)"
+                  : decision === "REJECT"
+                    ? "Reject (Restrict)"
+                    : "Decision Pending"}
+              </span>
+              <span
+                className={`font-medium ${
+                  decision === "APPROVE"
+                    ? "text-success"
+                    : decision === "REJECT"
+                      ? "text-danger"
+                      : "text-default-500"
+                }`}
+              >
+                {decision ? "Selected" : "Required"}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 rounded-xl bg-default-100 p-1">
+              <Button
+                className={`w-full justify-center ${
+                  decision === "APPROVE"
+                    ? "bg-success text-success-foreground shadow-sm"
+                    : "bg-background text-default-700"
+                }`}
+                variant={decision === "APPROVE" ? "primary" : "ghost"}
+                onPress={() => {
+                  setDecision("APPROVE");
+                  setReason("");
+                }}
+              >
+                <svg
+                  className="mr-1 h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2}
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+                  />
+                </svg>
+                Approve
+              </Button>
+              <Button
+                className={`w-full justify-center ${
+                  decision === "REJECT" ? "shadow-sm" : "bg-background text-default-700"
+                }`}
+                variant={decision === "REJECT" ? "danger" : "ghost"}
+                onPress={() => {
+                  setDecision("REJECT");
+                  setReason("");
+                }}
+              >
+                <svg
+                  className="mr-1 h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2}
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="m9.75 9.75 4.5 4.5m0-4.5-4.5 4.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+                  />
+                </svg>
+                Reject
+              </Button>
+            </div>
           </div>
 
-          {/* Reason picker */}
-          <ReasonPicker
-            decision={decision}
-            selectedReason={reason}
-            onReasonChange={setReason}
-            otherText={otherText}
-            onOtherTextChange={setOtherText}
-          />
+          <div className="space-y-2">
+            <ReasonPicker
+              decision={decision}
+              selectedReason={reason}
+              onReasonChange={setReason}
+              otherText={otherText}
+              onOtherTextChange={setOtherText}
+            />
+          </div>
 
-          {/* Analyst note */}
-          {decision && (
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-default-700">
+          {decision ? (
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-default-700">
                 Analyst Note <span className="text-danger">*</span>
-                <span className="ml-1 text-xs text-default-400">(min 10 chars)</span>
+                <span className="ml-1 text-xs font-normal text-default-400">(min 10 chars)</span>
               </label>
               <textarea
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="Document your rationale for this decision..."
-                className="w-full rounded-lg border border-default-200 bg-default-50 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                rows={3}
+                className="w-full rounded-xl border border-default-200 bg-default-50 px-3 py-2 text-sm leading-6 text-default-700 focus:border-primary focus:outline-none"
+                rows={4}
               />
               <p className="text-xs text-default-400">{note.length}/500 characters</p>
             </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-default-200 px-4 py-4 text-sm text-default-400">
+              Select an approve or reject decision to continue.
+            </div>
           )}
 
-          {/* Submit */}
-          {decision && (
-            <Button
-              variant={decision === "APPROVE" ? "primary" : "danger"}
-              className={`w-full ${decision === "APPROVE" ? "bg-success text-success-foreground" : ""}`}
-              isDisabled={!isValid}
-              onPress={() => setShowConfirm(true)}
-            >
-              Submit Decision
-            </Button>
-          )}
+          <Button
+            variant={decision === "REJECT" ? "danger" : "primary"}
+            className={`mt-auto w-full rounded-xl px-4 py-3 shadow-sm ${decision === "APPROVE" ? "bg-success text-success-foreground" : ""}`}
+            isDisabled={!isValid}
+            onPress={() => setShowConfirm(true)}
+          >
+            Submit Decision
+          </Button>
         </Card.Content>
       </Card>
 
@@ -161,7 +232,9 @@ export function DecisionBar({
               </p>
               <p>
                 <span className="text-default-500">Decision:</span>{" "}
-                <span className={`font-medium ${decision === "APPROVE" ? "text-success" : "text-danger"}`}>
+                <span
+                  className={`font-medium ${decision === "APPROVE" ? "text-success" : "text-danger"}`}
+                >
                   {decision === "APPROVE" ? "Approve (Clear)" : "Reject (Restrict)"}
                 </span>
               </p>
@@ -170,16 +243,11 @@ export function DecisionBar({
                 <span className="font-medium">{effectiveReason}</span>
               </p>
               <p>
-                <span className="text-default-500">Note:</span>{" "}
-                <span>{note}</span>
+                <span className="text-default-500">Note:</span> <span>{note}</span>
               </p>
             </div>
             <div className="mt-6 flex gap-3">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onPress={() => setShowConfirm(false)}
-              >
+              <Button variant="outline" className="flex-1" onPress={() => setShowConfirm(false)}>
                 Cancel
               </Button>
               <Button

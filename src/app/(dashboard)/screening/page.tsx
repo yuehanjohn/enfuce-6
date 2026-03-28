@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button, Card } from "@heroui/react";
 import { ConfidenceMeter } from "@/components/screening/ConfidenceMeter";
 import type { Layer1Flag, Layer2Result } from "@/types/screening";
@@ -14,12 +14,52 @@ interface Layer2Summary {
   human_review: number;
 }
 
+interface ProgressStats {
+  total_flags: number;
+  processed: number;
+  remaining: number;
+  auto_restrict: number;
+  auto_clear: number;
+  human_review: number;
+  source: string;
+}
+
 export default function ScreeningPage() {
   const [stage, setStage] = useState<Stage>("idle");
   const [layer1Flags, setLayer1Flags] = useState<Layer1Flag[]>([]);
   const [layer2Results, setLayer2Results] = useState<Layer2Result[]>([]);
   const [layer2Summary, setLayer2Summary] = useState<Layer2Summary | null>(null);
   const [customersScreened, setCustomersScreened] = useState(0);
+  const [progress, setProgress] = useState<ProgressStats | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Poll /api/screening/progress every 2s while Layer 2 is running
+  useEffect(() => {
+    if (stage === "layer2") {
+      pollRef.current = setInterval(async () => {
+        try {
+          const res = await fetch("/api/screening/progress");
+          if (res.ok) {
+            const data = await res.json();
+            setProgress(data as ProgressStats);
+          }
+        } catch {
+          // ignore transient poll errors
+        }
+      }, 2000);
+    } else {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    }
+    return () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, [stage]);
 
   async function runLayer1() {
     setStage("layer1");
@@ -36,6 +76,7 @@ export default function ScreeningPage() {
 
   async function runLayer2() {
     setStage("layer2");
+    setProgress(null);
     try {
       const res = await fetch("/api/screening/layer2", {
         method: "POST",
@@ -50,6 +91,11 @@ export default function ScreeningPage() {
       setStage("layer1_done");
     }
   }
+
+  const progressPct =
+    progress && progress.total_flags > 0
+      ? Math.round((progress.processed / progress.total_flags) * 100)
+      : 0;
 
   return (
     <div className="space-y-6">
@@ -135,16 +181,64 @@ export default function ScreeningPage() {
               Snowflake Cortex AI + Brave Search researches each flagged case. Produces reasoning
               trail + confidence score + routing decision.
             </p>
+
             {stage === "layer1_done" && (
               <Button variant="primary" className="w-full" onPress={runLayer2}>
                 Process with AI
               </Button>
             )}
+
             {stage === "layer2" && (
-              <Button variant="primary" className="w-full" isDisabled>
-                Processing {layer1Flags.length} cases...
-              </Button>
+              <div className="space-y-3">
+                <Button variant="primary" className="w-full" isDisabled>
+                  Processing {layer1Flags.length} cases...
+                </Button>
+
+                {/* Live progress panel */}
+                {progress ? (
+                  <div className="space-y-2">
+                    {/* Progress bar */}
+                    <div className="flex items-center justify-between text-xs text-default-500 mb-1">
+                      <span>
+                        {progress.processed} / {progress.total_flags} processed
+                      </span>
+                      <span>{progressPct}%</span>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-default-100 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-primary transition-all duration-500"
+                        style={{ width: `${progressPct}%` }}
+                      />
+                    </div>
+
+                    {/* Live counters */}
+                    <div className="grid grid-cols-3 gap-2 text-center text-xs mt-2">
+                      <div className="rounded-lg bg-danger-50 p-2">
+                        <p className="text-base font-bold text-danger">{progress.auto_restrict}</p>
+                        <p className="text-default-500">Auto-Restrict</p>
+                      </div>
+                      <div className="rounded-lg bg-success-50 p-2">
+                        <p className="text-base font-bold text-success">{progress.auto_clear}</p>
+                        <p className="text-default-500">Auto-Clear</p>
+                      </div>
+                      <div className="rounded-lg bg-warning-50 p-2">
+                        <p className="text-base font-bold text-warning">{progress.human_review}</p>
+                        <p className="text-default-500">Human Review</p>
+                      </div>
+                    </div>
+
+                    <div className="text-center text-xs text-default-400">
+                      {progress.remaining > 0 ? `${progress.remaining} remaining` : "Finalising..."}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-xs text-default-400 text-center animate-pulse">
+                    Waiting for first batch...
+                  </div>
+                )}
+              </div>
             )}
+
             {stage === "layer2_done" && layer2Summary && (
               <div className="space-y-2">
                 <div className="rounded-lg bg-success-50 p-3 text-sm">
@@ -166,6 +260,7 @@ export default function ScreeningPage() {
                 </div>
               </div>
             )}
+
             {["idle", "layer1"].includes(stage) && (
               <div className="text-sm text-default-400 text-center py-2">
                 Waiting for Layer 1...
@@ -199,6 +294,12 @@ export default function ScreeningPage() {
               <a href="/queue">
                 <Button variant="primary" className="w-full bg-warning text-warning-foreground">
                   Open Review Queue ({layer2Summary.human_review} cases)
+                </Button>
+              </a>
+            ) : stage === "layer2" && progress && progress.human_review > 0 ? (
+              <a href="/queue">
+                <Button variant="primary" className="w-full bg-warning text-warning-foreground">
+                  View Queue ({progress.human_review} so far)
                 </Button>
               </a>
             ) : (

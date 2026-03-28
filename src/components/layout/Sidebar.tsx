@@ -1,71 +1,256 @@
 "use client";
 
-import { Button } from "@heroui/react";
+import { Avatar, Dropdown } from "@heroui/react";
+import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useCallback, useState } from "react";
 
-const navItems = [
+type NavItem = {
+  href: string;
+  label: string;
+  match: (pathname: string) => boolean;
+  Icon: React.FC<{ className?: string }>;
+};
+
+function IconDashboard({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+    >
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      <rect x="14" y="14" width="7" height="7" rx="1.5" />
+    </svg>
+  );
+}
+
+function IconReviewQueue({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+      />
+      <circle cx="17" cy="7" r="3.25" fill="#f2f2f2" />
+      <circle cx="17" cy="7" r="3.25" />
+      <path strokeLinecap="round" d="M17 5.75v2.1M17 9.4v.15" />
+    </svg>
+  );
+}
+
+function IconAuditLog({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M4 7.5 12 4l8 3.5V17L12 20.5 4 17V7.5z"
+      />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 7.5 12 11l8-3.5M12 11v9.5" />
+    </svg>
+  );
+}
+
+/** Double chevron (Figma / Lucide-style ChevronsLeft) — collapse sidebar */
+function IconChevronsLeft({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="m11 17-5-5 5-5" />
+      <path d="m18 17-5-5 5-5" />
+    </svg>
+  );
+}
+
+/** Double chevron (Figma / Lucide-style ChevronsRight) — expand sidebar */
+function IconChevronsRight({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="m6 17 5-5-5-5" />
+      <path d="m13 17 5-5-5-5" />
+    </svg>
+  );
+}
+
+const navItems: NavItem[] = [
   {
     href: "/dashboard",
     label: "Dashboard",
-    icon: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6",
-  },
-  {
-    href: "/screening",
-    label: "Screening",
-    icon: "M12 9v3.75m0-10.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.75c0 5.592 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.57-.598-3.75h-.152c-3.196 0-6.1-1.25-8.25-3.286Z",
+    match: (p) => p === "/dashboard" || p.startsWith("/dashboard/"),
+    Icon: IconDashboard,
   },
   {
     href: "/queue",
-    label: "Review Queue",
-    icon: "M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM3.75 12h.007v.008H3.75V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm-.375 5.25h.007v.008H3.75v-.008Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z",
+    label: "Review queue",
+    match: (p) => p === "/queue" || p.startsWith("/queue/") || p.startsWith("/review"),
+    Icon: IconReviewQueue,
   },
   {
     href: "/audit",
-    label: "Audit Log",
-    icon: "M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z",
-  },
-  {
-    href: "/settings/profile",
-    label: "Settings",
-    icon: "M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z",
+    label: "Audit log",
+    match: (p) => p === "/audit" || p.startsWith("/audit/"),
+    Icon: IconAuditLog,
   },
 ];
 
-export function Sidebar() {
-  const pathname = usePathname();
+function EnfuseLogo({ collapsed }: { collapsed: boolean }) {
+  if (collapsed) {
+    // Show only the circular mark (leftmost ~25px of the 100px-wide SVG)
+    return (
+      <div className="relative h-6.25 w-6.25 shrink-0 overflow-hidden" aria-hidden>
+        <Image
+          src="/logo.svg"
+          alt=""
+          width={100}
+          height={35}
+          unoptimized
+          className="pointer-events-none absolute left-0 top-0 h-6.25 w-auto max-w-none select-none"
+        />
+      </div>
+    );
+  }
 
   return (
-    <aside className="hidden md:flex md:w-64 md:flex-col border-r border-default-200 bg-background">
-      <div className="flex h-16 items-center px-6 border-b border-default-200">
-        <Link href="/dashboard" className="text-xl font-bold">
-          Enfuce
+    <Image
+      src="/logo.svg"
+      alt="Enfuce"
+      width={100}
+      height={35}
+      unoptimized
+      priority
+      className="pointer-events-none h-8.75 w-auto max-w-38 shrink-0 select-none"
+    />
+  );
+}
+
+export function Sidebar() {
+  const pathname = usePathname();
+  const router = useRouter();
+  const [collapsed, setCollapsed] = useState(false);
+
+  const handleSignOut = useCallback(async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+    router.refresh();
+  }, [router]);
+
+  const handleSettings = useCallback(() => {
+    router.push("/settings/profile");
+  }, [router]);
+
+  return (
+    <aside
+      className={`relative hidden h-full shrink-0 flex-col border-r border-neutral-200/80 bg-[#f2f2f2] md:flex ${collapsed ? "md:w-[4.25rem]" : "md:w-60"}`}
+    >
+      <div
+        className={`flex shrink-0 items-center gap-2 px-3 py-3 ${collapsed ? "flex-col gap-3" : "h-[3.75rem] justify-between pr-2"}`}
+      >
+        <Link
+          href="/dashboard"
+          className={`flex min-w-0 items-center text-[#1e3a5f] ${collapsed ? "justify-center" : ""}`}
+          aria-label="Enfuse home"
+        >
+          <EnfuseLogo collapsed={collapsed} />
         </Link>
+        {!collapsed ? (
+          <button
+            type="button"
+            onClick={() => setCollapsed(true)}
+            className="flex size-9 shrink-0 items-center justify-center rounded-lg text-neutral-600 transition-colors hover:bg-neutral-300/50 hover:text-neutral-900"
+            aria-label="Collapse sidebar"
+          >
+            <IconChevronsLeft className="size-4" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setCollapsed(false)}
+            className="flex size-9 shrink-0 items-center justify-center rounded-lg text-neutral-600 transition-colors hover:bg-neutral-300/50 hover:text-neutral-900"
+            aria-label="Expand sidebar"
+          >
+            <IconChevronsRight className="size-4" />
+          </button>
+        )}
       </div>
-      <nav className="flex-1 space-y-1 p-4">
+
+      <nav className="flex flex-1 flex-col gap-1 px-2 pt-1">
         {navItems.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+          const isActive = item.match(pathname);
+          const { Icon } = item;
           return (
-            <Link key={item.href} href={item.href}>
-              <Button
-                variant={isActive ? "secondary" : "ghost"}
-                className="w-full justify-start gap-3"
-              >
-                <svg
-                  className="h-5 w-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={1.5}
-                  stroke="currentColor"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
-                </svg>
-                {item.label}
-              </Button>
+            <Link
+              key={item.href}
+              href={item.href}
+              title={collapsed ? item.label : undefined}
+              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-neutral-800 transition-colors hover:bg-neutral-300/40 ${
+                isActive ? "bg-neutral-300/70 text-neutral-900" : ""
+              } ${collapsed ? "justify-center px-2" : ""}`}
+            >
+              <Icon className="size-5 shrink-0 text-neutral-700" />
+              {!collapsed && <span>{item.label}</span>}
             </Link>
           );
         })}
       </nav>
+
+      <div className={`shrink-0 p-3 pt-2 ${collapsed ? "flex justify-center" : ""}`}>
+        <Dropdown>
+          <Dropdown.Trigger
+            className="flex rounded-full ring-offset-2 ring-offset-[#f2f2f2] outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-neutral-400"
+            aria-label="Account menu"
+          >
+            <Avatar size="sm" className="size-9 shrink-0 bg-neutral-300 text-neutral-800">
+              <Avatar.Fallback>A</Avatar.Fallback>
+            </Avatar>
+          </Dropdown.Trigger>
+          <Dropdown.Popover>
+            <Dropdown.Menu>
+              <Dropdown.Item id="settings" onAction={handleSettings}>
+                Settings
+              </Dropdown.Item>
+              <Dropdown.Item id="signout" onAction={handleSignOut}>
+                Sign out
+              </Dropdown.Item>
+            </Dropdown.Menu>
+          </Dropdown.Popover>
+        </Dropdown>
+      </div>
     </aside>
   );
 }
