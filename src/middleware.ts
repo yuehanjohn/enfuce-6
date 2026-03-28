@@ -1,8 +1,30 @@
-import { type NextRequest } from "next/server";
-import { updateSession } from "@/lib/supabase/middleware";
+import { NextResponse, type NextRequest } from "next/server";
 
-export async function middleware(request: NextRequest) {
-  return await updateSession(request);
+const SESSION_COOKIE = "enfuse_session";
+const SESSION_VALUE = "authenticated";
+
+const protectedPaths = ["/dashboard", "/settings", "/onboarding", "/screening", "/queue", "/review", "/audit"];
+
+export function middleware(request: NextRequest) {
+  const session = request.cookies.get(SESSION_COOKIE)?.value;
+  const isLoggedIn = session === SESSION_VALUE;
+  const path = request.nextUrl.pathname;
+
+  const isProtected = protectedPaths.some((p) => path.startsWith(p));
+
+  if (!isLoggedIn && isProtected) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    return NextResponse.redirect(url);
+  }
+
+  if (isLoggedIn && (path === "/login" || path === "/signup")) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/screening";
+    return NextResponse.redirect(url);
+  }
+
+  return NextResponse.next();
 }
 
 export const config = {

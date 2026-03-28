@@ -1,15 +1,13 @@
 "use client";
 
-import { Button, Avatar, Dropdown } from "@heroui/react";
+import { Avatar, Dropdown } from "@heroui/react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 
 export function DashboardHeader() {
   const router = useRouter();
-  const supabase = createClient();
 
   async function handleSignOut() {
-    await supabase.auth.signOut();
+    await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
     router.refresh();
   }
@@ -17,25 +15,17 @@ export function DashboardHeader() {
   return (
     <header className="flex h-16 items-center justify-between border-b border-default-200 px-6">
       <div className="md:hidden">
-        <span className="text-xl font-bold">SaaS</span>
+        <span className="text-xl font-bold">Enfuse</span>
       </div>
       <div className="flex-1" />
       <Dropdown>
         <Dropdown.Trigger>
-          <Button variant="ghost" isIconOnly>
-            <Avatar size="sm">
-              <Avatar.Fallback>U</Avatar.Fallback>
-            </Avatar>
-          </Button>
+          <Avatar size="sm">
+            <Avatar.Fallback>A</Avatar.Fallback>
+          </Avatar>
         </Dropdown.Trigger>
         <Dropdown.Popover>
           <Dropdown.Menu>
-            <Dropdown.Item href="/settings/profile" id="profile">
-              Profile
-            </Dropdown.Item>
-            <Dropdown.Item href="/settings/billing" id="billing">
-              Billing
-            </Dropdown.Item>
             <Dropdown.Item id="signout" onAction={handleSignOut}>
               Sign Out
             </Dropdown.Item>
