@@ -3,15 +3,15 @@
 import { useEffect, useState } from "react";
 
 // ─── Brand tokens ────────────────────────────────────────────────────────────
-const L = "#C8F04C";
-const LH = "#B8E03C";
-const S = "#161616";
-const SE = "#1F1F1F";
-const BG = "#0D0D0D";
-const TS = "#8A8A8A";
-const TM = "#444444";
-const RED = "#EF4444";
-const GREEN = "#22C55E";
+const L = "#C8F04C"; // lime — decorative, button bg, icons, meter fill
+const LT = "#87B800"; // lime-derived dark — for text on light backgrounds (7:1+ on white)
+const S = "#FFFFFF"; // surface / card background
+const SE = "#E5E7EB"; // border / divider
+const BG = "#F9FAFB"; // page background
+const TS = "#6B7280"; // secondary text (~4.6:1 on white — passes WCAG AA)
+const TM = "#9CA3AF"; // muted text (decorative / non-essential)
+const RED = "#DC2626"; // error / conflict
+const GREEN = "#16A34A"; // success / match
 
 // ─── Data ────────────────────────────────────────────────────────────────────
 const STATS = [
@@ -25,12 +25,12 @@ const STEPS = [
   {
     n: "01",
     title: "Ingest & Match",
-    body: "Customer records are pulled from your Snowflake environment and scored against live OFAC, UN, and EU sanctions feeds using Jaro-Winkler fuzzy matching and DOB/nationality similarity.",
+    body: "Customer records are pulled from your Supabase database and scored against live OFAC, UN, and EU sanctions feeds using Jaro-Winkler fuzzy matching and DOB/nationality similarity.",
   },
   {
     n: "02",
     title: "AI Triage",
-    body: "Cortex AI + Brave Search researches each flagged case autonomously. High-confidence matches are escalated immediately; clear false positives are cleared without analyst time.",
+    body: "OpenRouter AI + Bright Data web search researches each flagged case autonomously. High-confidence matches are escalated immediately; clear false positives are cleared without analyst time.",
   },
   {
     n: "03",
@@ -41,32 +41,32 @@ const STEPS = [
 
 const FEATURES = [
   {
-    icon: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C8F04C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>`,
+    icon: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4A6500" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>`,
     title: "Fuzzy Name Matching",
     body: "Jaro-Winkler similarity with configurable thresholds catches name variants, transliterations, and aliases that exact-match rules miss.",
   },
   {
-    icon: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C8F04C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>`,
+    icon: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4A6500" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>`,
     title: "AI-Powered Research",
-    body: "Snowflake Cortex + Brave Search autonomously investigates each flag, delivering structured reasoning and cited evidence directly to analysts.",
+    body: "OpenRouter AI + Bright Data web search autonomously investigates each flag, delivering structured reasoning and cited evidence directly to analysts.",
   },
   {
-    icon: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C8F04C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>`,
+    icon: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4A6500" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>`,
     title: "Analyst Dashboard",
     body: "Side-by-side field comparison, AI confidence score, signal breakdown, and source links — everything needed to decide in a single, frictionless panel.",
   },
   {
-    icon: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C8F04C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
+    icon: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4A6500" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
     title: "Immutable Audit Trail",
     body: "Every Layer 1 flag, AI reasoning chain, human decision, and chat transcript is logged immutably. Legally defensible records by design.",
   },
   {
-    icon: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C8F04C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4.03 3-9 3s-9-1.34-9-3M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/></svg>`,
-    title: "Snowflake-Native",
-    body: "All data stays in your Snowflake environment. Zero data egress, no third-party storage, full sovereignty over sensitive customer records.",
+    icon: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4A6500" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4.03 3-9 3s-9-1.34-9-3M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/></svg>`,
+    title: "Supabase-Native",
+    body: "All data stays in your Supabase environment. Zero data egress, no third-party storage, full sovereignty over sensitive customer records.",
   },
   {
-    icon: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C8F04C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
+    icon: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4A6500" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
     title: "Human-in-the-Loop",
     body: "AI handles high-confidence cases automatically. Edge cases always reach a human, maintaining the accountability regulators expect.",
   },
@@ -103,8 +103,8 @@ const PAGE_CSS = `
 
   /* Scrollbar */
   .es-root ::-webkit-scrollbar { width: 5px; }
-  .es-root ::-webkit-scrollbar-track { background: #0D0D0D; }
-  .es-root ::-webkit-scrollbar-thumb { background: #2A2A2A; border-radius: 3px; }
+  .es-root ::-webkit-scrollbar-track { background: #F9FAFB; }
+  .es-root ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 3px; }
 
   /* Custom cursor */
   .cs-dot {
@@ -112,7 +112,7 @@ const PAGE_CSS = `
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #C8F04C;
+    background: #4A6500;
     pointer-events: none;
     z-index: 9999;
     transform: translate(-50%, -50%);
@@ -123,7 +123,7 @@ const PAGE_CSS = `
     width: 20px;
     height: 20px;
     border-radius: 50%;
-    border: 1.5px solid #C8F04C;
+    border: 1.5px solid #4A6500;
     pointer-events: none;
     z-index: 9998;
     transform: translate(-50%, -50%);
@@ -138,10 +138,10 @@ const PAGE_CSS = `
     transition: background 0.3s ease-out, border-color 0.3s ease-out;
   }
   .es-nav.scrolled {
-    background: rgba(13,13,13,0.9);
+    background: rgba(249,250,251,0.92);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border-bottom: 1px solid rgba(200,240,76,0.15);
+    border-bottom: 1px solid rgba(74,101,0,0.15);
   }
   .nav-inner {
     max-width: 1200px;
@@ -158,19 +158,19 @@ const PAGE_CSS = `
     align-items: center;
   }
   .nav-link {
-    color: #8A8A8A;
+    color: #6B7280;
     font-size: 14px;
     text-decoration: none;
     transition: color 0.2s ease-out;
     font-family: Inter, sans-serif;
   }
-  .nav-link:hover { color: #fff; }
+  .nav-link:hover { color: #111827; }
   .nav-cta-wrap { display: flex; }
   .nav-hamburger {
     display: none;
     background: none;
     border: none;
-    color: #fff;
+    color: #111827;
     padding: 6px;
     align-items: center;
     justify-content: center;
@@ -180,8 +180,8 @@ const PAGE_CSS = `
     flex-direction: column;
     gap: 16px;
     padding: 20px 24px 24px;
-    background: #0D0D0D;
-    border-top: 1px solid #1F1F1F;
+    background: #FFFFFF;
+    border-top: 1px solid #E5E7EB;
   }
   .nav-mobile.open { display: flex; }
 
@@ -207,8 +207,8 @@ const PAGE_CSS = `
   /* Fade-up on scroll */
   .fade-up {
     opacity: 0;
-    transform: translateY(32px);
-    transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+    transform: translateY(44px);
+    transition: opacity 0.55s cubic-bezier(0.22, 1, 0.36, 1), transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
   }
   .fade-up.visible {
     opacity: 1;
@@ -230,14 +230,15 @@ const PAGE_CSS = `
 
   /* Feature card */
   .feat-card {
-    background: #161616;
-    border: 1px solid #1F1F1F;
+    background: #FFFFFF;
+    border: 1px solid #E5E7EB;
     border-radius: 8px;
     padding: 32px;
-    transition: border-color 0.3s ease-out;
+    transition: border-color 0.3s ease-out, box-shadow 0.3s ease-out;
   }
   .feat-card:hover {
-    border-color: rgba(200,240,76,0.3);
+    border-color: rgba(74,101,0,0.35);
+    box-shadow: 0 2px 12px rgba(74,101,0,0.06);
   }
 
   /* Responsive grids */
@@ -284,7 +285,7 @@ const PAGE_CSS = `
     .stats-grid { grid-template-columns: repeat(2, 1fr); }
     .steps-grid { grid-template-columns: 1fr; }
     .step-connector-svg { display: none; }
-    .step-item { padding: 24px 0 !important; border-bottom: 1px solid #1F1F1F; }
+    .step-item { padding: 24px 0 !important; border-bottom: 1px solid #E5E7EB; }
     .step-item:last-child { border-bottom: none; }
   }
   @media (max-width: 600px) {
@@ -298,7 +299,7 @@ const PAGE_CSS = `
   /* CTA button base */
   .btn-lime {
     background: #C8F04C;
-    color: #000;
+    color: #1a2e00;
     font-family: 'DM Sans', sans-serif;
     font-weight: 700;
     text-decoration: none;
@@ -311,21 +312,21 @@ const PAGE_CSS = `
   }
   .btn-lime:hover { background: #B8E03C; }
   .btn-ghost {
-    border: 1px solid rgba(255,255,255,0.25);
-    color: #fff;
+    border: 1px solid rgba(17,24,39,0.25);
+    color: #111827;
     font-family: 'DM Sans', sans-serif;
     font-weight: 700;
     text-decoration: none;
     border-radius: 4px;
-    transition: border-color 0.2s ease-out;
+    transition: border-color 0.2s ease-out, background 0.2s ease-out;
     display: inline-flex;
     align-items: center;
     gap: 8px;
   }
-  .btn-ghost:hover { border-color: rgba(255,255,255,0.6); }
+  .btn-ghost:hover { border-color: rgba(17,24,39,0.5); background: rgba(17,24,39,0.04); }
 
-  /* Suppress HeroUI / global body overrides for this page */
-  .es-root { background: #0D0D0D !important; }
+  /* Override HeroUI / global body for this page */
+  .es-root { background: #F9FAFB !important; }
 `;
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -342,16 +343,27 @@ export default function LandingPage() {
     const isTouchOnly = window.matchMedia("(hover: none)").matches;
     const dot = document.getElementById("cs-dot") as HTMLElement | null;
     const ring = document.getElementById("cs-ring") as HTMLElement | null;
-    let mx = 0, my = 0, rx = 0, ry = 0, rafId = 0;
+    let mx = 0,
+      my = 0,
+      rx = 0,
+      ry = 0,
+      rafId = 0;
 
     function moveDot(e: MouseEvent) {
-      mx = e.clientX; my = e.clientY;
-      if (dot) { dot.style.left = mx + "px"; dot.style.top = my + "px"; }
+      mx = e.clientX;
+      my = e.clientY;
+      if (dot) {
+        dot.style.left = mx + "px";
+        dot.style.top = my + "px";
+      }
     }
     function lerpRing() {
       rx += (mx - rx) * 0.12;
       ry += (my - ry) * 0.12;
-      if (ring) { ring.style.left = rx + "px"; ring.style.top = ry + "px"; }
+      if (ring) {
+        ring.style.left = rx + "px";
+        ring.style.top = ry + "px";
+      }
       rafId = requestAnimationFrame(lerpRing);
     }
     if (!isTouchOnly) {
@@ -368,25 +380,28 @@ export default function LandingPage() {
     // 4 · Stats count-up
     const statsSection = document.getElementById("stats-section");
     let statsDone = false;
-    const statsObs = new IntersectionObserver((entries) => {
-      if (!entries[0].isIntersecting || statsDone) return;
-      statsDone = true;
-      document.querySelectorAll<HTMLElement>(".stat-num").forEach((el) => {
-        const target = parseFloat(el.dataset.target ?? "0");
-        const suffix = el.dataset.suffix ?? "";
-        const isFloat = String(target).includes(".");
-        const dur = 1800;
-        const t0 = performance.now();
-        function tick(now: number) {
-          const p = Math.min((now - t0) / dur, 1);
-          const ease = 1 - Math.pow(1 - p, 3);
-          const cur = target * ease;
-          el.textContent = (isFloat ? cur.toFixed(1) : Math.floor(cur).toLocaleString()) + suffix;
-          if (p < 1) requestAnimationFrame(tick);
-        }
-        requestAnimationFrame(tick);
-      });
-    }, { threshold: 0.5 });
+    const statsObs = new IntersectionObserver(
+      (entries) => {
+        if (!entries[0].isIntersecting || statsDone) return;
+        statsDone = true;
+        document.querySelectorAll<HTMLElement>(".stat-num").forEach((el) => {
+          const target = parseFloat(el.dataset.target ?? "0");
+          const suffix = el.dataset.suffix ?? "";
+          const isFloat = String(target).includes(".");
+          const dur = 1800;
+          const t0 = performance.now();
+          function tick(now: number) {
+            const p = Math.min((now - t0) / dur, 1);
+            const ease = 1 - Math.pow(1 - p, 3);
+            const cur = target * ease;
+            el.textContent = (isFloat ? cur.toFixed(1) : Math.floor(cur).toLocaleString()) + suffix;
+            if (p < 1) requestAnimationFrame(tick);
+          }
+          requestAnimationFrame(tick);
+        });
+      },
+      { threshold: 0.5 }
+    );
     if (statsSection) statsObs.observe(statsSection);
 
     // 5 · Step connector line draw
@@ -394,26 +409,32 @@ export default function LandingPage() {
     const stepsSection = document.getElementById("steps-section");
     let lineObs: IntersectionObserver | null = null;
     if (stepLine && stepsSection) {
-      lineObs = new IntersectionObserver((entries) => {
-        if (entries[0].isIntersecting) {
-          stepLine.classList.add("draw");
-          lineObs?.disconnect();
-        }
-      }, { threshold: 0.3 });
+      lineObs = new IntersectionObserver(
+        (entries) => {
+          if (entries[0].isIntersecting) {
+            stepLine.classList.add("draw");
+            lineObs?.disconnect();
+          }
+        },
+        { threshold: 0.3 }
+      );
       lineObs.observe(stepsSection);
     }
 
     // 6 · Fade-up elements
     const fadeEls = document.querySelectorAll<HTMLElement>(".fade-up");
-    const fadeObs = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (!entry.isIntersecting) return;
-        const el = entry.target as HTMLElement;
-        const delay = parseFloat(el.dataset.delay ?? "0") * 1000;
-        setTimeout(() => el.classList.add("visible"), delay);
-        fadeObs.unobserve(el);
-      });
-    }, { threshold: 0.1 });
+    const fadeObs = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          const el = entry.target as HTMLElement;
+          const delay = parseFloat(el.dataset.delay ?? "0") * 1000;
+          setTimeout(() => el.classList.add("visible"), delay);
+          fadeObs.unobserve(el);
+        });
+      },
+      { threshold: 0.1 }
+    );
     fadeEls.forEach((el) => fadeObs.observe(el));
 
     return () => {
@@ -431,7 +452,7 @@ export default function LandingPage() {
       className="es-root"
       style={{
         background: BG,
-        color: "#fff",
+        color: "#111827",
         fontFamily: "Inter, sans-serif",
         minHeight: "100vh",
       }}
@@ -449,9 +470,22 @@ export default function LandingPage() {
       <nav className={`es-nav${scrolled ? " scrolled" : ""}`}>
         <div className="nav-inner">
           {/* Logo */}
-          <a href="#" style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none" }}>
-            <div style={{ width: 8, height: 8, borderRadius: "50%", background: L, flexShrink: 0 }} />
-            <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 800, fontSize: 17, letterSpacing: "0.08em", color: "#fff" }}>
+          <a
+            href="#"
+            style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none" }}
+          >
+            <div
+              style={{ width: 8, height: 8, borderRadius: "50%", background: L, flexShrink: 0 }}
+            />
+            <span
+              style={{
+                fontFamily: "'DM Sans', sans-serif",
+                fontWeight: 800,
+                fontSize: 17,
+                letterSpacing: "0.08em",
+                color: "#111827",
+              }}
+            >
               ENFUCE SCREEN
             </span>
           </a>
@@ -464,14 +498,16 @@ export default function LandingPage() {
               ["Security", "#security"],
               ["Compliance", "#compliance"],
             ].map(([label, href]) => (
-              <a key={label} href={href} className="nav-link">{label}</a>
+              <a key={label} href={href} className="nav-link">
+                {label}
+              </a>
             ))}
           </div>
 
           {/* Desktop CTA */}
           <div className="nav-cta-wrap">
-            <a href="#contact" className="btn-lime" style={{ fontSize: 14, padding: "10px 20px" }}>
-              Request Access →
+            <a href="/login" className="btn-lime" style={{ fontSize: 14, padding: "10px 20px" }}>
+              Try Out Now →
             </a>
           </div>
 
@@ -481,7 +517,15 @@ export default function LandingPage() {
             onClick={() => setMobileOpen((v) => !v)}
             aria-label={mobileOpen ? "Close menu" : "Open menu"}
           >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            >
               {mobileOpen ? (
                 <>
                   <line x1="6" y1="6" x2="18" y2="18" />
@@ -517,12 +561,12 @@ export default function LandingPage() {
             </a>
           ))}
           <a
-            href="#contact"
+            href="/login"
             className="btn-lime"
             style={{ fontSize: 14, padding: "12px 20px", marginTop: 8, justifyContent: "center" }}
             onClick={() => setMobileOpen(false)}
           >
-            Request Access →
+            Try Out Now →
           </a>
         </div>
       </nav>
@@ -539,7 +583,7 @@ export default function LandingPage() {
           textAlign: "center",
           padding: "120px 24px 80px",
           position: "relative",
-          background: `radial-gradient(ellipse 900px 700px at 50% 42%, rgba(200,240,76,0.04) 0%, transparent 68%)`,
+          background: `radial-gradient(ellipse 900px 700px at 50% 42%, rgba(200,240,76,0.14) 0%, transparent 68%)`,
         }}
       >
         <div style={{ maxWidth: 880 }}>
@@ -550,15 +594,17 @@ export default function LandingPage() {
               display: "inline-flex",
               alignItems: "center",
               gap: 8,
-              border: "1px solid rgba(200,240,76,0.2)",
+              border: "1px solid rgba(74,101,0,0.22)",
               borderRadius: 20,
               padding: "6px 14px",
               marginBottom: 32,
+              background: "rgba(200,240,76,0.07)",
             }}
           >
             <div style={{ width: 5, height: 5, borderRadius: "50%", background: L }} />
             <span style={{ fontSize: 12, color: TS, letterSpacing: "0.06em" }}>
-              Powered by <strong style={{ color: "#fff", fontWeight: 600 }}>Enfuce</strong> infrastructure
+              Powered by <strong style={{ color: "#111827", fontWeight: 600 }}>Enfuce</strong>{" "}
+              infrastructure
             </span>
           </div>
 
@@ -569,20 +615,25 @@ export default function LandingPage() {
               fontWeight: 800,
               fontSize: "clamp(40px, 7vw, 72px)",
               lineHeight: 1.04,
-              color: "#fff",
+              color: "#111827",
               marginBottom: 24,
               letterSpacing: "-0.01em",
             }}
           >
             {"Know exactly".split(" ").map((word, i) => (
-              <span key={`a${i}`} className="hw" style={{ marginRight: "0.22em" }}>{word}</span>
+              <span key={`a${i}`} className="hw" style={{ marginRight: "0.22em" }}>
+                {word}
+              </span>
             ))}
             <br />
             {"who you're".split(" ").map((word, i) => (
-              <span key={`b${i}`} className="hw" style={{ marginRight: "0.22em" }}>{word}</span>
-            ))}
-            {" "}
-            <span className="hw" style={{ color: L }}>screening.</span>
+              <span key={`b${i}`} className="hw" style={{ marginRight: "0.22em" }}>
+                {word}
+              </span>
+            ))}{" "}
+            <span className="hw" style={{ color: LT }}>
+              screening.
+            </span>
           </h1>
 
           {/* Subheadline */}
@@ -596,15 +647,21 @@ export default function LandingPage() {
               lineHeight: 1.72,
             }}
           >
-            AI-powered sanctions & PEP screening for financial institutions. Three-layer intelligence pipeline — rules, AI, and human oversight — that reduces false positives by 99.7%.
+            AI-powered sanctions & PEP screening for financial institutions. Three-layer
+            intelligence pipeline — rules, AI, and human oversight — that reduces false positives by
+            99.7%.
           </p>
 
           {/* Buttons */}
           <div className="hero-btns hw" style={{ marginBottom: 60 }}>
-            <a href="#contact" className="btn-lime" style={{ fontSize: 15, padding: "14px 28px" }}>
-              Request Access →
+            <a href="/login" className="btn-lime" style={{ fontSize: 15, padding: "14px 28px" }}>
+              Try Out Now →
             </a>
-            <a href="#how-it-works" className="btn-ghost" style={{ fontSize: 15, padding: "14px 28px" }}>
+            <a
+              href="#how-it-works"
+              className="btn-ghost"
+              style={{ fontSize: 15, padding: "14px 28px" }}
+            >
               See how it works
             </a>
           </div>
@@ -620,6 +677,7 @@ export default function LandingPage() {
           borderTop: `1px solid ${SE}`,
           borderBottom: `1px solid ${SE}`,
           padding: "44px 24px",
+          background: S,
         }}
       >
         <div className="stats-grid" style={{ maxWidth: 960, margin: "0 auto" }}>
@@ -633,7 +691,7 @@ export default function LandingPage() {
                   fontFamily: "'DM Sans', sans-serif",
                   fontWeight: 800,
                   fontSize: 42,
-                  color: L,
+                  color: LT,
                   lineHeight: 1,
                   marginBottom: 8,
                 }}
@@ -651,7 +709,16 @@ export default function LandingPage() {
       ════════════════════════════════════════════════════════ */}
       <section id="how-it-works" style={{ padding: "120px 24px" }}>
         <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-          <p style={{ fontSize: 11, letterSpacing: "0.15em", color: L, textTransform: "uppercase", marginBottom: 14 }}>
+          <p
+            style={{
+              fontSize: 11,
+              letterSpacing: "0.15em",
+              color: LT,
+              textTransform: "uppercase",
+              marginBottom: 14,
+              fontWeight: 600,
+            }}
+          >
             PROCESS
           </p>
           <h2
@@ -661,6 +728,7 @@ export default function LandingPage() {
               fontSize: "clamp(28px, 4.5vw, 48px)",
               marginBottom: 80,
               lineHeight: 1.06,
+              color: "#111827",
             }}
           >
             Three layers. Zero gaps.
@@ -698,7 +766,7 @@ export default function LandingPage() {
                     width: 56,
                     height: 56,
                     borderRadius: "50%",
-                    background: BG,
+                    background: S,
                     border: `1px solid ${SE}`,
                     display: "flex",
                     alignItems: "center",
@@ -712,7 +780,7 @@ export default function LandingPage() {
                       fontWeight: 800,
                       fontSize: 11,
                       letterSpacing: "0.12em",
-                      color: L,
+                      color: LT,
                     }}
                   >
                     {step.n}
@@ -724,7 +792,7 @@ export default function LandingPage() {
                     fontWeight: 700,
                     fontSize: 20,
                     marginBottom: 12,
-                    color: "#fff",
+                    color: "#111827",
                   }}
                 >
                   {step.title}
@@ -744,7 +812,16 @@ export default function LandingPage() {
           <div className="product-grid">
             {/* Left copy */}
             <div>
-              <p style={{ fontSize: 11, letterSpacing: "0.15em", color: L, textTransform: "uppercase", marginBottom: 14 }}>
+              <p
+                style={{
+                  fontSize: 11,
+                  letterSpacing: "0.15em",
+                  color: LT,
+                  textTransform: "uppercase",
+                  marginBottom: 14,
+                  fontWeight: 600,
+                }}
+              >
                 CASE REVIEW
               </p>
               <h2
@@ -754,14 +831,20 @@ export default function LandingPage() {
                   fontSize: "clamp(26px, 4vw, 42px)",
                   marginBottom: 20,
                   lineHeight: 1.08,
+                  color: "#111827",
                 }}
               >
                 Every decision, fully explained.
               </h2>
               <p style={{ fontSize: 16, color: TS, lineHeight: 1.72, marginBottom: 36 }}>
-                Analysts see field-by-field match comparison, an AI confidence score, matching and conflicting signals, and cited source links — all in a single, frictionless panel.
+                Analysts see field-by-field match comparison, an AI confidence score, matching and
+                conflicting signals, and cited source links — all in a single, frictionless panel.
               </p>
-              <a href="#contact" className="btn-lime" style={{ fontSize: 14, padding: "12px 24px" }}>
+              <a
+                href="#contact"
+                className="btn-lime"
+                style={{ fontSize: 14, padding: "12px 24px" }}
+              >
                 See the dashboard →
               </a>
             </div>
@@ -779,7 +862,16 @@ export default function LandingPage() {
       ════════════════════════════════════════════════════════ */}
       <section id="security" style={{ padding: "0 24px 120px" }}>
         <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-          <p style={{ fontSize: 11, letterSpacing: "0.15em", color: L, textTransform: "uppercase", marginBottom: 14 }}>
+          <p
+            style={{
+              fontSize: 11,
+              letterSpacing: "0.15em",
+              color: LT,
+              textTransform: "uppercase",
+              marginBottom: 14,
+              fontWeight: 600,
+            }}
+          >
             CAPABILITIES
           </p>
           <h2
@@ -789,17 +881,14 @@ export default function LandingPage() {
               fontSize: "clamp(26px, 4vw, 42px)",
               marginBottom: 56,
               lineHeight: 1.06,
+              color: "#111827",
             }}
           >
             Built for compliance teams.
           </h2>
           <div className="feat-grid">
             {FEATURES.map((f, i) => (
-              <div
-                key={f.title}
-                className="feat-card fade-up"
-                data-delay={String(i * 0.06)}
-              >
+              <div key={f.title} className="feat-card fade-up" data-delay={String(i * 0.13)}>
                 <div
                   dangerouslySetInnerHTML={{ __html: f.icon }}
                   style={{ marginBottom: 20, lineHeight: 0 }}
@@ -810,7 +899,7 @@ export default function LandingPage() {
                     fontWeight: 700,
                     fontSize: 17,
                     marginBottom: 10,
-                    color: "#fff",
+                    color: "#111827",
                   }}
                 >
                   {f.title}
@@ -843,14 +932,15 @@ export default function LandingPage() {
               <div
                 key={pill.label}
                 style={{
-                  border: `1px solid ${pill.lime ? "rgba(200,240,76,0.4)" : "#2A2A2A"}`,
+                  border: `1px solid ${pill.lime ? "rgba(74,101,0,0.35)" : SE}`,
                   borderRadius: 20,
                   padding: "8px 18px",
                   fontSize: 13,
-                  color: pill.lime ? L : TS,
+                  color: pill.lime ? LT : TS,
                   fontWeight: pill.lime ? 600 : 400,
                   letterSpacing: "0.03em",
                   whiteSpace: "nowrap",
+                  background: pill.lime ? "rgba(200,240,76,0.08)" : "transparent",
                 }}
               >
                 {pill.label}
@@ -863,10 +953,7 @@ export default function LandingPage() {
       {/* ════════════════════════════════════════════════════════
           CTA
       ════════════════════════════════════════════════════════ */}
-      <section
-        id="contact"
-        style={{ padding: "120px 24px", textAlign: "center" }}
-      >
+      <section id="contact" style={{ padding: "120px 24px", textAlign: "center" }}>
         <div style={{ maxWidth: 580, margin: "0 auto" }}>
           <h2
             style={{
@@ -875,13 +962,13 @@ export default function LandingPage() {
               fontSize: "clamp(30px, 5vw, 52px)",
               marginBottom: 40,
               lineHeight: 1.05,
-              color: "#fff",
+              color: "#111827",
             }}
           >
             Ready to screen smarter?
           </h2>
-          <a href="mailto:screen@enfuce.com" className="btn-lime" style={{ fontSize: 16, padding: "16px 36px" }}>
-            Request Access →
+          <a href="/login" className="btn-lime" style={{ fontSize: 16, padding: "16px 36px" }}>
+            Try Out Now →
           </a>
         </div>
       </section>
@@ -899,6 +986,7 @@ export default function LandingPage() {
           flexWrap: "wrap",
           gap: 12,
           maxWidth: "100%",
+          background: S,
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -909,15 +997,13 @@ export default function LandingPage() {
               fontWeight: 800,
               fontSize: 14,
               letterSpacing: "0.08em",
-              color: "#fff",
+              color: "#111827",
             }}
           >
             ENFUCE SCREEN
           </span>
         </div>
-        <span style={{ fontSize: 13, color: TM }}>
-          © 2026 Built on Enfuce infrastructure
-        </span>
+        <span style={{ fontSize: 13, color: TM }}>© 2026 Built on Enfuce infrastructure</span>
       </footer>
     </div>
   );
@@ -926,14 +1012,14 @@ export default function LandingPage() {
 // ─── Case Review Mock ─────────────────────────────────────────────────────────
 function CaseReviewMock() {
   const fields = [
-    { label: "Full Name",    customer: "Muhammad Al-Rashidi",  match: true  },
-    { label: "Date of Birth", customer: "1974-03-15",          match: true  },
-    { label: "Nationality",  customer: "Jordanian",            match: true  },
-    { label: "Passport No.", customer: "J08821445",            match: false },
-    { label: "Country",      customer: "Amman, Jordan",        match: false },
+    { label: "Full Name", customer: "Muhammad Al-Rashidi", match: true },
+    { label: "Date of Birth", customer: "1974-03-15", match: true },
+    { label: "Nationality", customer: "Jordanian", match: true },
+    { label: "Passport No.", customer: "J08821445", match: false },
+    { label: "Country", customer: "Amman, Jordan", match: false },
   ];
 
-  const matching   = ["Name similarity 94.2%", "DOB exact match", "Nationality match"];
+  const matching = ["Name similarity 94.2%", "DOB exact match", "Nationality match"];
   const conflicting = ["Passport digits differ", "Country mismatch"];
 
   return (
@@ -944,6 +1030,7 @@ function CaseReviewMock() {
         borderRadius: 8,
         overflow: "hidden",
         fontFamily: "Inter, sans-serif",
+        boxShadow: "0 4px 24px rgba(0,0,0,0.06)",
       }}
     >
       {/* Header */}
@@ -955,6 +1042,7 @@ function CaseReviewMock() {
           alignItems: "center",
           justifyContent: "space-between",
           gap: 12,
+          background: BG,
         }}
       >
         <div>
@@ -969,18 +1057,16 @@ function CaseReviewMock() {
           >
             Case #SAN-2847
           </div>
-          <div style={{ fontSize: 15, fontWeight: 600, color: "#fff" }}>
-            Muhammad Al-Rashidi
-          </div>
+          <div style={{ fontSize: 15, fontWeight: 600, color: "#111827" }}>Muhammad Al-Rashidi</div>
         </div>
         <div
           style={{
             background: "rgba(245,158,11,0.08)",
-            border: "1px solid rgba(245,158,11,0.25)",
+            border: "1px solid rgba(245,158,11,0.3)",
             borderRadius: 4,
             padding: "4px 10px",
             fontSize: 10,
-            color: "#F59E0B",
+            color: "#92400e",
             fontWeight: 700,
             letterSpacing: "0.06em",
             whiteSpace: "nowrap",
@@ -1038,7 +1124,7 @@ function CaseReviewMock() {
                 >
                   {f.label}
                 </div>
-                <div style={{ fontSize: 12, color: "#fff" }}>{f.customer}</div>
+                <div style={{ fontSize: 12, color: "#111827" }}>{f.customer}</div>
               </div>
             </div>
           ))}
@@ -1062,7 +1148,7 @@ function CaseReviewMock() {
               fontFamily: "'DM Sans', sans-serif",
               fontWeight: 800,
               fontSize: 34,
-              color: L,
+              color: LT,
               marginBottom: 8,
               lineHeight: 1,
             }}
@@ -1079,9 +1165,7 @@ function CaseReviewMock() {
               overflow: "hidden",
             }}
           >
-            <div
-              style={{ width: "78%", height: "100%", background: L, borderRadius: 2 }}
-            />
+            <div style={{ width: "78%", height: "100%", background: L, borderRadius: 2 }} />
           </div>
 
           {/* Matching signals */}
@@ -1112,7 +1196,7 @@ function CaseReviewMock() {
                     width: 5,
                     height: 5,
                     borderRadius: "50%",
-                    background: L,
+                    background: GREEN,
                     flexShrink: 0,
                   }}
                 />
@@ -1168,6 +1252,7 @@ function CaseReviewMock() {
           display: "flex",
           alignItems: "center",
           gap: 8,
+          background: BG,
         }}
       >
         <svg
