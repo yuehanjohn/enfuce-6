@@ -1,5 +1,5 @@
-// Mock data for demo — simulates Snowflake tables
-// In production, all reads come from Snowflake via SQL API
+// Mock data for demo mode
+// In production, all reads come from Supabase
 
 import type {
   Customer,
@@ -270,8 +270,14 @@ export const MOCK_LAYER2_RESULTS: Layer2Result[] = [
     matching_signals: ["name_exact", "nationality_match", "alias_partial_match"],
     conflicting_signals: ["dob_2yr_discrepancy", "no_public_corroboration"],
     sources: [
-      { label: "OFAC SDN Designation Notice — Jan 2023", url: "https://ofac.treasury.gov/recent-actions/20230115" },
-      { label: "Reuters — OFAC designates Lebanese financial facilitator", url: "https://reuters.com/world/middle-east/ofac-sanctions-2023-01-15" },
+      {
+        label: "OFAC SDN Designation Notice — Jan 2023",
+        url: "https://ofac.treasury.gov/recent-actions/20230115",
+      },
+      {
+        label: "Reuters — OFAC designates Lebanese financial facilitator",
+        url: "https://reuters.com/world/middle-east/ofac-sanctions-2023-01-15",
+      },
     ],
     processed_at: "2026-03-27T08:10:00Z",
   },
@@ -284,12 +290,26 @@ export const MOCK_LAYER2_RESULTS: Layer2Result[] = [
     routing: "AUTO_RESTRICT",
     reasoning:
       "Very high confidence match. Full name 'Viktor Petrov' closely matches sanctioned 'Viktor Sergeyevich Petrov'. Exact DOB match (1965-11-22). Nationality matches (Russian Federation). Multiple independent sources corroborate: Reuters and Financial Times both report on this individual's designation under E.O. 14024. Customer's passport number format consistent with Russian Federation issuance. Auto-restricting based on overwhelming evidence.",
-    matching_signals: ["name_high_similarity", "dob_exact", "nationality_match", "multiple_source_corroboration"],
+    matching_signals: [
+      "name_high_similarity",
+      "dob_exact",
+      "nationality_match",
+      "multiple_source_corroboration",
+    ],
     conflicting_signals: [],
     sources: [
-      { label: "OFAC SDN Designation — June 2022", url: "https://ofac.treasury.gov/recent-actions/20220610" },
-      { label: "Reuters — Russia sanctions expansion", url: "https://reuters.com/business/finance/russia-sanctions-2022" },
-      { label: "Financial Times — Oligarch network exposed", url: "https://ft.com/content/russia-oligarch-network-2022" },
+      {
+        label: "OFAC SDN Designation — June 2022",
+        url: "https://ofac.treasury.gov/recent-actions/20220610",
+      },
+      {
+        label: "Reuters — Russia sanctions expansion",
+        url: "https://reuters.com/business/finance/russia-sanctions-2022",
+      },
+      {
+        label: "Financial Times — Oligarch network exposed",
+        url: "https://ft.com/content/russia-oligarch-network-2022",
+      },
     ],
     processed_at: "2026-03-27T08:10:00Z",
   },
@@ -303,9 +323,18 @@ export const MOCK_LAYER2_RESULTS: Layer2Result[] = [
     reasoning:
       "Very low confidence match. While the surname 'Smith' matches, this is an extremely common name. Customer is a 35-year-old US citizen; watchlist entry is a 56-year-old UK citizen. DOB differs by 20 years. Nationality does not match. No aliases overlap. Online search reveals no connection between customer and any sanctioned activity. This is a clear name collision false positive.",
     matching_signals: ["surname_match_only"],
-    conflicting_signals: ["dob_20yr_discrepancy", "nationality_mismatch", "no_alias_overlap", "age_mismatch", "no_public_connection"],
+    conflicting_signals: [
+      "dob_20yr_discrepancy",
+      "nationality_mismatch",
+      "no_alias_overlap",
+      "age_mismatch",
+      "no_public_connection",
+    ],
     sources: [
-      { label: "UN Security Council Consolidated List", url: "https://www.un.org/securitycouncil/sanctions/list" },
+      {
+        label: "UN Security Council Consolidated List",
+        url: "https://www.un.org/securitycouncil/sanctions/list",
+      },
     ],
     processed_at: "2026-03-27T08:10:00Z",
   },
@@ -322,7 +351,10 @@ export const MOCK_LAYER2_RESULTS: Layer2Result[] = [
     conflicting_signals: ["dob_2yr_discrepancy", "common_name", "limited_corroboration"],
     sources: [
       { label: "EU Sanctions List — Council Regulation", url: "https://ec.europa.eu/sanctions" },
-      { label: "DEA Report — Central American drug networks", url: "https://dea.gov/reports/central-america-2024" },
+      {
+        label: "DEA Report — Central American drug networks",
+        url: "https://dea.gov/reports/central-america-2024",
+      },
     ],
     processed_at: "2026-03-27T08:10:00Z",
   },
@@ -335,11 +367,22 @@ export const MOCK_LAYER2_RESULTS: Layer2Result[] = [
     routing: "HUMAN_REVIEW",
     reasoning:
       "High-moderate confidence. Customer 'Chen Wei' matches sanctioned 'Chen Wei Lin' — the customer name appears to be a substring. Exact DOB match. Nationality matches (Chinese). The alias 'Chen Wei' on the sanctions list exactly matches the customer's full name. However, 'Chen Wei' is an extremely common Chinese name. OFAC designation is for technology transfer activities. Customer's occupation and business dealings should be verified. One news article from South China Morning Post references the OFAC designation.",
-    matching_signals: ["name_substring_match", "dob_exact", "nationality_match", "alias_exact_match"],
+    matching_signals: [
+      "name_substring_match",
+      "dob_exact",
+      "nationality_match",
+      "alias_exact_match",
+    ],
     conflicting_signals: ["extremely_common_name", "occupation_unverified"],
     sources: [
-      { label: "OFAC SDN Designation — Sep 2024", url: "https://ofac.treasury.gov/recent-actions/20240915" },
-      { label: "SCMP — US sanctions Chinese tech facilitators", url: "https://scmp.com/tech/us-sanctions-china-2024" },
+      {
+        label: "OFAC SDN Designation — Sep 2024",
+        url: "https://ofac.treasury.gov/recent-actions/20240915",
+      },
+      {
+        label: "SCMP — US sanctions Chinese tech facilitators",
+        url: "https://scmp.com/tech/us-sanctions-china-2024",
+      },
     ],
     processed_at: "2026-03-27T08:10:00Z",
   },
@@ -380,7 +423,7 @@ export const MOCK_QUEUE: QueueItem[] = [
   },
 ];
 
-// ── Mutable stores for demo (simulating Snowflake writes) ───────────
+// ── Mutable stores for demo mode ────────────────────────────────────
 
 export const decisions: Decision[] = [];
 export const auditLog: AuditEntry[] = [];

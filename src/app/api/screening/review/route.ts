@@ -2,13 +2,13 @@
 import { NextResponse } from "next/server";
 import type { ReviewCase } from "@/types/screening";
 import {
-  hasSnowflakeConnection,
-  fetchQueueItemById as sfFetchQueue,
-  fetchCustomerById as sfFetchCustomer,
-  fetchSanctionsEntryById as sfFetchSanctions,
-  fetchLayer2ByResultId as sfFetchLayer2,
-  fetchLayer1ByCustomer as sfFetchLayer1,
-} from "@/lib/screening/snowflake-queries";
+  isScreeningConfigured,
+  fetchQueueItemById as dbFetchQueue,
+  fetchCustomerById as dbFetchCustomer,
+  fetchSanctionsEntryById as dbFetchSanctions,
+  fetchLayer2ByResultId as dbFetchLayer2,
+  fetchLayer1ByCustomer as dbFetchLayer1,
+} from "@/lib/screening/queries";
 import {
   findQueueItem,
   findCustomer,
@@ -25,15 +25,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Missing id parameter" }, { status: 400 });
   }
 
-  if (hasSnowflakeConnection()) {
-    const queue = await sfFetchQueue(id);
+  if (isScreeningConfigured()) {
+    const queue = await dbFetchQueue(id);
     if (!queue) return NextResponse.json({ error: "Queue item not found" }, { status: 404 });
 
     const [customer, watchlist, layer2, layer1] = await Promise.all([
-      sfFetchCustomer(queue.customer_id),
-      sfFetchSanctions(queue.entity_id),
-      sfFetchLayer2(queue.result_id),
-      sfFetchLayer1(queue.customer_id),
+      dbFetchCustomer(queue.customer_id),
+      dbFetchSanctions(queue.entity_id),
+      dbFetchLayer2(queue.result_id),
+      dbFetchLayer1(queue.customer_id),
     ]);
 
     if (!customer || !watchlist || !layer2 || !layer1) {

@@ -1,6 +1,6 @@
 // GET /api/screening/queue — Return pending review queue
 import { NextResponse } from "next/server";
-import { hasSnowflakeConnection, fetchQueue as sfFetchQueue } from "@/lib/screening/snowflake-queries";
+import { isScreeningConfigured, fetchQueue as dbFetchQueue } from "@/lib/screening/queries";
 import {
   MOCK_QUEUE,
   findCustomer,
@@ -9,9 +9,9 @@ import {
 } from "@/lib/screening/data";
 
 export async function GET() {
-  if (hasSnowflakeConnection()) {
-    const queue = await sfFetchQueue();
-    return NextResponse.json({ queue, count: queue.length, source: "snowflake" });
+  if (isScreeningConfigured()) {
+    const queue = await dbFetchQueue();
+    return NextResponse.json({ queue, count: queue.length, source: "supabase" });
   }
 
   // Mock mode

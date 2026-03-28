@@ -1,6 +1,6 @@
 # Enfuce — Sanctions & PEP Screening Triage Tool
 
-Intelligent three-layer screening pipeline that combines deterministic rules, Snowflake Cortex AI reasoning, and human-in-the-loop review to screen customers against global sanctions and PEP lists.
+Intelligent three-layer screening pipeline that combines deterministic rules, OpenRouter AI reasoning, and human-in-the-loop review to screen customers against global sanctions and PEP lists.
 
 ## Architecture
 
@@ -11,7 +11,7 @@ Intelligent three-layer screening pipeline that combines deterministic rules, Sn
           |
     ~300 Flagged Customers
           |
-  Layer 2: AI Warehouse            Snowflake Cortex · Brave Search · Batch
+  Layer 2: AI Analysis             OpenRouter · Bright Data Search · Batch
           |
     >= 90%  -->  AUTO-RESTRICT
     <= 10%  -->  AUTO-CLEAR
@@ -22,20 +22,20 @@ Intelligent three-layer screening pipeline that combines deterministic rules, Sn
 
 ## Stack
 
-| Layer          | Technology                                   |
-| -------------- | -------------------------------------------- |
-| Framework      | Next.js 16 (App Router, TypeScript)          |
-| UI             | HeroUI v3 + Tailwind CSS v4                  |
-| Data Warehouse | Snowflake (SQL API)                          |
-| AI             | Snowflake Cortex (`COMPLETE()`)              |
-| Web Search     | Brave Search via Cortex (`SEARCH_PREVIEW()`) |
-| Auth           | Cookie-based demo auth                       |
+| Layer      | Technology                             |
+| ---------- | -------------------------------------- |
+| Framework  | Next.js 16 (App Router, TypeScript)    |
+| UI         | HeroUI v3 + Tailwind CSS v4            |
+| Database   | Supabase (PostgreSQL)                  |
+| AI         | OpenRouter API (Claude Sonnet default) |
+| Web Search | Bright Data SERP API                   |
+| Auth       | Cookie-based demo auth                 |
 
 ---
 
 ## Quick Start (Demo Mode)
 
-The app works out of the box with mock data — no Snowflake account required.
+The app works out of the box with mock data — no external services required.
 
 ```bash
 npm install
@@ -48,74 +48,26 @@ npm run dev
 
 ---
 
-## Snowflake Setup (Production Mode)
+## Production Setup
 
 ### Prerequisites
 
-- A Snowflake account with **Cortex LLM Functions** enabled
-- `ACCOUNTADMIN` or equivalent role for initial setup
-- A warehouse (e.g. `COMPUTE_WH`)
+- A Supabase project
+- An OpenRouter API key
+- (Optional) A Bright Data account for web search
 
-### Step 1: Create Database & Schemas
+### Step 1: Set Up Supabase Database
 
-Run the migration files in order in the Snowflake SQL Worksheet:
+Run the migration files in your Supabase SQL editor:
 
-```bash
-snowflake/migrations/
-├── 001_create_database.sql     # Database + schemas
-├── 002_customers.sql           # CUSTOMERS.ONBOARDING table
-├── 003_watchlist.sql           # WATCHLIST.SANCTIONS_PEP table
-├── 004_layer1_flags.sql        # SCREENING.LAYER1_FLAGS + Jaro-Winkler UDF
-├── 005_layer2_results.sql      # SCREENING.LAYER2_RESULTS table
-├── 006_queue.sql               # QUEUE.PENDING_REVIEW table
-├── 007_decisions.sql           # DECISIONS.RESTRICTIONS + CLEARANCES
-└── 008_audit_log.sql           # AUDIT.LOG table
+```
+supabase/migrations/
+├── 001_init.sql                 # User tables (profiles, subscriptions, preferences)
+├── 002_screening_tables.sql     # Screening tables (customers, watchlist, flags, results, queue, decisions, audit)
+└── 003_screening_seed.sql       # Demo seed data (5 customers, 5 sanctions entries, pre-computed results)
 ```
 
-Execute each file in sequence:
-
-```sql
--- In Snowflake SQL Worksheet, run each migration file:
--- 1. Open 001_create_database.sql → Execute
--- 2. Open 002_customers.sql → Execute
--- 3. ... through 008_audit_log.sql
-```
-
-### Step 2: Seed Demo Data
-
-```bash
-snowflake/seed/
-├── 001_seed_customers.sql      # 5 demo customers
-├── 002_seed_watchlist.sql      # 5 matching sanctions entries
-├── 003_run_layer1.sql          # Run Layer 1 screening
-└── 004_run_layer2_cortex.sql   # Layer 2 Cortex procedure + execution
-```
-
-```sql
--- Run in order:
--- 1. 001_seed_customers.sql
--- 2. 002_seed_watchlist.sql
--- 3. 003_run_layer1.sql
--- 4. For Layer 2, run the stored procedure:
-CALL SCREENING.PROCESS_LAYER2_BATCH();
-```
-
-### Step 3: Configure API Token
-
-Generate a keypair JWT for the Snowflake SQL API:
-
-```bash
-# Generate RSA key pair
-openssl genrsa 2048 | openssl pkcs8 -topk8 -inform PEM -out rsa_key.p8 -nocrypt
-openssl rsa -in rsa_key.p8 -pubout -out rsa_key.pub
-
-# Set the public key in Snowflake
-ALTER USER your_user SET RSA_PUBLIC_KEY='<paste public key without headers>';
-```
-
-Then generate a JWT token (see [Snowflake SQL API docs](https://docs.snowflake.com/en/developer-guide/sql-api/authenticating)).
-
-### Step 4: Set Environment Variables
+### Step 2: Set Environment Variables
 
 ```bash
 cp .env.example .env.local
@@ -127,76 +79,43 @@ Edit `.env.local`:
 DEMO_EMAIL=analyst@enfuce.demo
 DEMO_PASSWORD=enfuce2026
 
-SNOWFLAKE_ACCOUNT=your-org-your-account    # e.g. myorg-myaccount
-SNOWFLAKE_WAREHOUSE=COMPUTE_WH
-SNOWFLAKE_DATABASE=ENFUSE_SCREENING
-SNOWFLAKE_SCHEMA=PUBLIC
-SNOWFLAKE_API_TOKEN=your-jwt-token
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+
+# OpenRouter
+OPENROUTER_API_KEY=sk-or-v1-your-key
+OPENROUTER_MODEL=anthropic/claude-sonnet-4
+
+# Bright Data (optional)
+BRIGHTDATA_API_TOKEN=your-token
+BRIGHTDATA_ZONE=your-zone
 ```
 
-### Step 5: Run
+### Step 3: Run
 
 ```bash
 npm run dev
 ```
 
-The app auto-detects Snowflake configuration. When `SNOWFLAKE_ACCOUNT` and `SNOWFLAKE_API_TOKEN` are set, all reads/writes go to real Snowflake. Otherwise, it falls back to in-memory mock data.
+The app auto-detects configuration. When `SUPABASE_SERVICE_ROLE_KEY` is set, all reads/writes go to Supabase. Otherwise, it falls back to in-memory mock data.
 
 ---
 
-## Using Real Sanctions Data
+## Database Schema Reference
 
-### Option A: Snowflake Marketplace
-
-1. In Snowflake, go to **Marketplace** → search for **"Global Sanctions Data"**
-2. Install the `GLOBAL_SANCTIONS_DATA` listing
-3. Create a view in your watchlist schema:
-
-```sql
-CREATE OR REPLACE VIEW WATCHLIST.SANCTIONS_PEP AS
-SELECT * FROM GLOBAL_SANCTIONS_DATA.CYBERSYN.SANCTIONS_DATAFEED;
-```
-
-### Option B: TPC-DS Sample Customers
-
-Use Snowflake's built-in sample data for customer records:
-
-```sql
-CREATE OR REPLACE VIEW CUSTOMERS.ONBOARDING AS
-SELECT
-    C_CUSTOMER_ID AS customer_id,
-    TRIM(COALESCE(C_FIRST_NAME,'') || ' ' || COALESCE(C_LAST_NAME,'')) AS full_name,
-    TRY_TO_DATE(C_BIRTH_YEAR||'-'||LPAD(C_BIRTH_MONTH,2,'0')||'-'||LPAD(C_BIRTH_DAY,2,'0')) AS dob,
-    C_BIRTH_COUNTRY AS nationality,
-    C_EMAIL_ADDRESS AS email,
-    'INDIVIDUAL' AS entity_type,
-    CURRENT_TIMESTAMP() AS created_at
-FROM SNOWFLAKE_SAMPLE_DATA.TPCDS_SF100TCL.CUSTOMER
-WHERE C_FIRST_NAME IS NOT NULL AND C_LAST_NAME IS NOT NULL
-LIMIT 100000;
-```
-
----
-
-## Snowflake Schema Reference
+All screening tables use the `screening_` prefix in the `public` schema:
 
 ```
-ENFUSE_SCREENING
-├── CUSTOMERS
-│   └── ONBOARDING              customer_id, full_name, dob, nationality, email
-├── WATCHLIST
-│   └── SANCTIONS_PEP           entity_id, entity_name, aliases, dob, authority, list_name
-├── SCREENING
-│   ├── LAYER1_FLAGS            flag_id, composite_score, name_score, dob_score, nationality_score
-│   ├── LAYER2_RESULTS          result_id, ai_confidence, routing, reasoning, sources (VARIANT)
-│   └── JARO_WINKLER_SIMILARITY()  JavaScript UDF for fuzzy name matching
-├── QUEUE
-│   └── PENDING_REVIEW          queue_id, ai_confidence, status (PENDING/IN_REVIEW/DECIDED)
-├── DECISIONS
-│   ├── RESTRICTIONS            decision_id, trigger_type (AUTO/HUMAN), reason_category
-│   └── CLEARANCES              decision_id, trigger_type (AUTO/HUMAN), reason_category
-└── AUDIT
-    └── LOG                     log_id, layer (1/2/3), event_type, payload (VARIANT)
+public
+├── screening_customers          customer_id, full_name, dob, nationality, email
+├── screening_watchlist          entity_id, entity_name, aliases, dob, authority, list_name
+├── screening_layer1_flags       flag_id, composite_score, name_score, dob_score, nationality_score
+├── screening_layer2_results     result_id, ai_confidence, routing, reasoning, sources (jsonb)
+├── screening_queue              queue_id, ai_confidence, status (PENDING/IN_REVIEW/DECIDED)
+├── screening_decisions          decision_id, decision, trigger_type (AUTO/HUMAN), reason_category
+└── screening_audit_log          log_id, layer (1/2/3), event_type, payload (jsonb)
 ```
 
 ---
@@ -223,9 +142,8 @@ ENFUSE_SCREENING
 ## Project Structure
 
 ```
-├── snowflake/
-│   ├── migrations/             8 SQL migration files (run in order)
-│   └── seed/                   Demo data + Layer 1/2 execution scripts
+├── supabase/
+│   └── migrations/             3 SQL migration files (run in order)
 ├── src/
 │   ├── app/
 │   │   ├── (auth)/login/       Login page
@@ -237,14 +155,15 @@ ENFUSE_SCREENING
 │   │   └── api/screening/      REST API (run, layer2, queue, review, chat, audit)
 │   ├── components/screening/   7 review UI components
 │   ├── lib/
-│   │   ├── snowflake.ts        Snowflake SQL API client (REST, polling, VARIANT parsing)
-│   │   ├── cortex.ts           Snowflake Cortex AI + Brave Search wrapper
+│   │   ├── openrouter.ts       OpenRouter API client (LLM + chat)
+│   │   ├── brightdata.ts       Bright Data SERP API client (web search)
+│   │   ├── supabase/           Supabase client (server + browser)
 │   │   ├── auth.ts             Cookie-based demo auth
 │   │   └── screening/
-│   │       ├── data.ts         Mock data (fallback when Snowflake not configured)
-│   │       ├── snowflake-queries.ts   Real Snowflake read/write layer
-│   │       ├── layer1.ts       Jaro-Winkler scoring (TypeScript mirror of UDF)
-│   │       ├── layer2.ts       Cortex batch processing orchestrator
+│   │       ├── data.ts         Mock data (fallback when Supabase not configured)
+│   │       ├── queries.ts      Supabase read/write layer
+│   │       ├── layer1.ts       Jaro-Winkler scoring engine
+│   │       ├── layer2.ts       OpenRouter batch processing orchestrator
 │   │       └── routing.ts      Confidence → routing logic
 │   └── types/screening.ts     Domain types
 └── .env.example                Environment variable template

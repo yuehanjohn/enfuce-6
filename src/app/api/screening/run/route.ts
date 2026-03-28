@@ -2,26 +2,25 @@
 // GET /api/screening/run — Return current Layer 1 flags
 import { NextResponse } from "next/server";
 import { runLayer1Screening } from "@/lib/screening/layer1";
-import { hasSnowflakeConnection, runLayer1Screening as sfRunLayer1, fetchLayer1Flags as sfFetchFlags } from "@/lib/screening/snowflake-queries";
 import {
-  MOCK_CUSTOMERS,
-  MOCK_SANCTIONS,
-  MOCK_LAYER1_FLAGS,
-  auditLog,
-} from "@/lib/screening/data";
+  isScreeningConfigured,
+  runLayer1Screening as dbRunLayer1,
+  fetchLayer1Flags as dbFetchFlags,
+} from "@/lib/screening/queries";
+import { MOCK_CUSTOMERS, MOCK_SANCTIONS, MOCK_LAYER1_FLAGS, auditLog } from "@/lib/screening/data";
 
 export async function POST() {
   try {
-    if (hasSnowflakeConnection()) {
-      const { flagCount, customerCount } = await sfRunLayer1();
-      const flags = await sfFetchFlags();
+    if (isScreeningConfigured()) {
+      const { flagCount, customerCount } = await dbRunLayer1();
+      const flags = await dbFetchFlags();
       return NextResponse.json({
         success: true,
         customers_screened: customerCount,
         sanctions_entries: 0,
         flags,
         flags_count: flagCount,
-        source: "snowflake",
+        source: "supabase",
       });
     }
 
@@ -55,15 +54,19 @@ export async function POST() {
     console.error("Layer 1 screening error:", error);
     return NextResponse.json(
       { error: "Layer 1 screening failed", details: String(error) },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }
 
 export async function GET() {
-  if (hasSnowflakeConnection()) {
-    const flags = await sfFetchFlags();
-    return NextResponse.json({ flags, count: flags.length, source: "snowflake" });
+  if (isScreeningConfigured()) {
+    const flags = await dbFetchFlags();
+    return NextResponse.json({ flags, count: flags.length, source: "supabase" });
   }
-  return NextResponse.json({ flags: MOCK_LAYER1_FLAGS, count: MOCK_LAYER1_FLAGS.length, source: "mock" });
+  return NextResponse.json({
+    flags: MOCK_LAYER1_FLAGS,
+    count: MOCK_LAYER1_FLAGS.length,
+    source: "mock",
+  });
 }

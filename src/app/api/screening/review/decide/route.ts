@@ -1,10 +1,10 @@
 // POST /api/screening/review/decide — Submit analyst decision
 import { NextResponse } from "next/server";
 import {
-  hasSnowflakeConnection,
-  submitDecision as sfSubmitDecision,
-  fetchQueueItemById as sfFetchQueue,
-} from "@/lib/screening/snowflake-queries";
+  isScreeningConfigured,
+  submitDecision as dbSubmitDecision,
+  fetchQueueItemById as dbFetchQueue,
+} from "@/lib/screening/queries";
 import { MOCK_QUEUE, decisions, auditLog } from "@/lib/screening/data";
 
 interface DecisionBody {
@@ -22,22 +22,22 @@ export async function POST(request: Request) {
     if (!body.queue_id || !body.decision || !body.reason_category || !body.analyst_note) {
       return NextResponse.json(
         { error: "Missing required fields: queue_id, decision, reason_category, analyst_note" },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
     if (body.analyst_note.length < 10) {
       return NextResponse.json(
         { error: "Analyst note must be at least 10 characters" },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
-    if (hasSnowflakeConnection()) {
-      const queueItem = await sfFetchQueue(body.queue_id);
+    if (isScreeningConfigured()) {
+      const queueItem = await dbFetchQueue(body.queue_id);
       if (!queueItem) return NextResponse.json({ error: "Queue item not found" }, { status: 404 });
 
-      await sfSubmitDecision({
+      await dbSubmitDecision({
         queueId: body.queue_id,
         customerId: queueItem.customer_id,
         resultId: queueItem.result_id,
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
         chatTranscript: body.chat_transcript,
       });
 
-      return NextResponse.json({ success: true, source: "snowflake" });
+      return NextResponse.json({ success: true, source: "supabase" });
     }
 
     // Mock mode
@@ -91,7 +91,7 @@ export async function POST(request: Request) {
     console.error("Decision submission error:", error);
     return NextResponse.json(
       { error: "Failed to submit decision", details: String(error) },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

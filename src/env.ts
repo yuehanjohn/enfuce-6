@@ -5,17 +5,18 @@ const envSchema = z.object({
   DEMO_EMAIL: z.string().email().default("analyst@enfuce.demo"),
   DEMO_PASSWORD: z.string().min(1).default("enfuce2026"),
 
-  // Snowflake (optional — falls back to mock data when not set)
-  SNOWFLAKE_ACCOUNT: z.string().optional(),
-  SNOWFLAKE_WAREHOUSE: z.string().default("COMPUTE_WH"),
-  SNOWFLAKE_DATABASE: z.string().default("SCREENING_DB"),
-  SNOWFLAKE_SCHEMA: z.string().default("PUBLIC"),
-  // Key-pair JWT auto-generation (recommended)
-  SNOWFLAKE_USER: z.string().optional(),
-  SNOWFLAKE_PRIVATE_KEY: z.string().optional(),
-  SNOWFLAKE_PUBLIC_KEY_FINGERPRINT: z.string().optional(),
-  // Static pre-generated token (alternative)
-  SNOWFLAKE_API_TOKEN: z.string().optional(),
+  // Supabase (optional — falls back to mock data when not set)
+  NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional(),
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().optional(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+
+  // OpenRouter (optional — falls back to mock data when not set)
+  OPENROUTER_API_KEY: z.string().optional(),
+  OPENROUTER_MODEL: z.string().default("anthropic/claude-sonnet-4"),
+
+  // Bright Data (optional — search falls back to empty results)
+  BRIGHTDATA_API_TOKEN: z.string().optional(),
+  BRIGHTDATA_ZONE: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

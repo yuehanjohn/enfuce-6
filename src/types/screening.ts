@@ -1,28 +1,5 @@
 // ── Screening Domain Types ──────────────────────────────────────────
 
-// Real Snowflake schema: SNOWFLAKE_SAMPLE_DATA.TPCDS_SF100TCL.CUSTOMER
-export interface SnowflakeCustomer {
-  c_customer_sk: number;
-  c_customer_id: string;
-  c_current_cdemo_sk: number | null;
-  c_current_hdemo_sk: number | null;
-  c_current_addr_sk: number | null;
-  c_first_shipto_date_sk: number | null;
-  c_first_sales_date_sk: number | null;
-  c_salutation: string | null;
-  c_first_name: string | null;
-  c_last_name: string | null;
-  c_preferred_cust_flag: string | null;
-  c_birth_day: number | null;
-  c_birth_month: number | null;
-  c_birth_year: number | null;
-  c_birth_country: string | null;
-  c_login: string | null;
-  c_email_address: string | null;
-  c_last_review_date: string | null;
-}
-
-// Normalized customer for screening (derived from SnowflakeCustomer)
 export interface Customer {
   customer_id: string;
   full_name: string;
@@ -33,7 +10,6 @@ export interface Customer {
   created_at: string;
 }
 
-// Real Snowflake schema: GLOBAL_SANCTIONS_DATA.SANCTIONS_DATAFEED
 export interface SanctionsEntry {
   sr_no: number;
   entity_id: string;
@@ -59,25 +35,6 @@ export interface SanctionsEntry {
   vessel_owner: string | null;
   gross_tonnage: string | null;
   gross_registered_tonnage: number | null;
-}
-
-// Helper to normalize a Snowflake customer row into our Customer type
-export function normalizeCustomer(row: SnowflakeCustomer): Customer {
-  const firstName = row.c_first_name ?? "";
-  const lastName = row.c_last_name ?? "";
-  const dob =
-    row.c_birth_year && row.c_birth_month && row.c_birth_day
-      ? `${row.c_birth_year}-${String(row.c_birth_month).padStart(2, "0")}-${String(row.c_birth_day).padStart(2, "0")}`
-      : "";
-  return {
-    customer_id: row.c_customer_id,
-    full_name: `${firstName} ${lastName}`.trim(),
-    dob,
-    nationality: row.c_birth_country ?? "",
-    email: row.c_email_address ?? "",
-    entity_type: "INDIVIDUAL",
-    created_at: row.c_last_review_date ?? new Date().toISOString(),
-  };
 }
 
 // ── Layer 1 ─────────────────────────────────────────────────────────

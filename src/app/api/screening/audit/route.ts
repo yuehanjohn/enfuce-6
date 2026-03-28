@@ -1,12 +1,12 @@
 // GET /api/screening/audit — Return audit log entries
 import { NextResponse } from "next/server";
-import { hasSnowflakeConnection, fetchAuditLog as sfFetchAudit } from "@/lib/screening/snowflake-queries";
+import { isScreeningConfigured, fetchAuditLog as dbFetchAudit } from "@/lib/screening/queries";
 import { auditLog, decisions, MOCK_LAYER2_RESULTS } from "@/lib/screening/data";
 
 export async function GET() {
-  if (hasSnowflakeConnection()) {
-    const entries = await sfFetchAudit();
-    return NextResponse.json({ entries, count: entries.length, decisions: [], source: "snowflake" });
+  if (isScreeningConfigured()) {
+    const entries = await dbFetchAudit();
+    return NextResponse.json({ entries, count: entries.length, decisions: [], source: "supabase" });
   }
 
   // Mock mode — combine seeded + runtime entries
@@ -27,8 +27,13 @@ export async function GET() {
   }));
 
   const allEntries = [...seededEntries, ...auditLog].sort(
-    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );
 
-  return NextResponse.json({ entries: allEntries, count: allEntries.length, decisions, source: "mock" });
+  return NextResponse.json({
+    entries: allEntries,
+    count: allEntries.length,
+    decisions,
+    source: "mock",
+  });
 }

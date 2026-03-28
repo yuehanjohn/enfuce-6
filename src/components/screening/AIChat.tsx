@@ -91,7 +91,10 @@ export function AIChat({ queueId, onTranscriptUpdate }: AIChatProps) {
     } catch (error) {
       setMessages((prev) => [
         ...prev.filter((m) => m.content !== ""),
-        { role: "assistant", content: `Error: ${error instanceof Error ? error.message : "Failed to get response"}. Make sure your Snowflake connection is configured.` },
+        {
+          role: "assistant",
+          content: `Error: ${error instanceof Error ? error.message : "Failed to get response"}. Make sure your OpenRouter API key is configured.`,
+        },
       ]);
     } finally {
       setIsLoading(false);
@@ -102,15 +105,28 @@ export function AIChat({ queueId, onTranscriptUpdate }: AIChatProps) {
     <Card className="flex h-full flex-col">
       <Card.Header>
         <div className="flex w-full items-center gap-2">
-          <svg className="h-5 w-5 text-primary" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 0 0-2.455 2.456Z" />
+          <svg
+            className="h-5 w-5 text-primary"
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth={1.5}
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 0 0-2.455 2.456Z"
+            />
           </svg>
           <Card.Title>AI Assistant</Card.Title>
         </div>
       </Card.Header>
       <Card.Content className="flex flex-1 flex-col gap-0 p-0">
         {/* Messages area */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-[200px] max-h-[400px]">
+        <div
+          ref={scrollRef}
+          className="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-[200px] max-h-[400px]"
+        >
           {messages.length === 0 && (
             <div className="flex h-full items-center justify-center text-center">
               <div className="space-y-2 text-default-400">
@@ -135,7 +151,9 @@ export function AIChat({ queueId, onTranscriptUpdate }: AIChatProps) {
                     : "bg-default-100 text-default-700"
                 }`}
               >
-                <p className="whitespace-pre-wrap">{msg.content || (isLoading ? "Thinking..." : "")}</p>
+                <p className="whitespace-pre-wrap">
+                  {msg.content || (isLoading ? "Thinking..." : "")}
+                </p>
               </div>
             </div>
           ))}

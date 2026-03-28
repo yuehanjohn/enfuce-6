@@ -2,29 +2,26 @@
 // GET /api/screening/layer2 — Return Layer 2 results
 import { NextResponse } from "next/server";
 import {
-  hasSnowflakeConnection,
-  runLayer2Processing as sfRunLayer2,
-  fetchLayer2Results as sfFetchResults,
-} from "@/lib/screening/snowflake-queries";
-import {
-  MOCK_LAYER2_RESULTS,
-  auditLog,
-} from "@/lib/screening/data";
+  isScreeningConfigured,
+  runLayer2Processing as dbRunLayer2,
+  fetchLayer2Results as dbFetchResults,
+} from "@/lib/screening/queries";
+import { MOCK_LAYER2_RESULTS, auditLog } from "@/lib/screening/data";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
     const useMock = body.mock !== false;
 
-    // Real Snowflake mode
-    if (hasSnowflakeConnection() && !useMock) {
-      const summary = await sfRunLayer2();
-      const results = await sfFetchResults();
+    // Real Supabase + OpenRouter mode
+    if (isScreeningConfigured() && !useMock) {
+      const summary = await dbRunLayer2();
+      const results = await dbFetchResults();
       return NextResponse.json({
         success: true,
         results,
         summary,
-        source: "snowflake",
+        source: "supabase",
       });
     }
 
@@ -61,15 +58,19 @@ export async function POST(request: Request) {
     console.error("Layer 2 processing error:", error);
     return NextResponse.json(
       { error: "Layer 2 processing failed", details: String(error) },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }
 
 export async function GET() {
-  if (hasSnowflakeConnection()) {
-    const results = await sfFetchResults();
-    return NextResponse.json({ results, count: results.length, source: "snowflake" });
+  if (isScreeningConfigured()) {
+    const results = await dbFetchResults();
+    return NextResponse.json({ results, count: results.length, source: "supabase" });
   }
-  return NextResponse.json({ results: MOCK_LAYER2_RESULTS, count: MOCK_LAYER2_RESULTS.length, source: "mock" });
+  return NextResponse.json({
+    results: MOCK_LAYER2_RESULTS,
+    count: MOCK_LAYER2_RESULTS.length,
+    source: "mock",
+  });
 }

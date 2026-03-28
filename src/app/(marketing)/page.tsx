@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 // ─── Brand tokens ────────────────────────────────────────────────────────────
 const L = "#C8F04C";
-const LH = "#B8E03C";
+const _LH = "#B8E03C";
 const S = "#161616";
 const SE = "#1F1F1F";
 const BG = "#0D0D0D";
@@ -25,12 +25,12 @@ const STEPS = [
   {
     n: "01",
     title: "Ingest & Match",
-    body: "Customer records are pulled from your Snowflake environment and scored against live OFAC, UN, and EU sanctions feeds using Jaro-Winkler fuzzy matching and DOB/nationality similarity.",
+    body: "Customer records are pulled from your Supabase database and scored against live OFAC, UN, and EU sanctions feeds using Jaro-Winkler fuzzy matching and DOB/nationality similarity.",
   },
   {
     n: "02",
     title: "AI Triage",
-    body: "Cortex AI + Brave Search researches each flagged case autonomously. High-confidence matches are escalated immediately; clear false positives are cleared without analyst time.",
+    body: "OpenRouter AI + Bright Data web search researches each flagged case autonomously. High-confidence matches are escalated immediately; clear false positives are cleared without analyst time.",
   },
   {
     n: "03",
@@ -48,7 +48,7 @@ const FEATURES = [
   {
     icon: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C8F04C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>`,
     title: "AI-Powered Research",
-    body: "Snowflake Cortex + Brave Search autonomously investigates each flag, delivering structured reasoning and cited evidence directly to analysts.",
+    body: "OpenRouter AI + Bright Data web search autonomously investigates each flag, delivering structured reasoning and cited evidence directly to analysts.",
   },
   {
     icon: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C8F04C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>`,
@@ -62,8 +62,8 @@ const FEATURES = [
   },
   {
     icon: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C8F04C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4.03 3-9 3s-9-1.34-9-3M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/></svg>`,
-    title: "Snowflake-Native",
-    body: "All data stays in your Snowflake environment. Zero data egress, no third-party storage, full sovereignty over sensitive customer records.",
+    title: "Supabase-Native",
+    body: "All data stays in your Supabase environment. Zero data egress, no third-party storage, full sovereignty over sensitive customer records.",
   },
   {
     icon: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C8F04C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
@@ -342,16 +342,27 @@ export default function LandingPage() {
     const isTouchOnly = window.matchMedia("(hover: none)").matches;
     const dot = document.getElementById("cs-dot") as HTMLElement | null;
     const ring = document.getElementById("cs-ring") as HTMLElement | null;
-    let mx = 0, my = 0, rx = 0, ry = 0, rafId = 0;
+    let mx = 0,
+      my = 0,
+      rx = 0,
+      ry = 0,
+      rafId = 0;
 
     function moveDot(e: MouseEvent) {
-      mx = e.clientX; my = e.clientY;
-      if (dot) { dot.style.left = mx + "px"; dot.style.top = my + "px"; }
+      mx = e.clientX;
+      my = e.clientY;
+      if (dot) {
+        dot.style.left = mx + "px";
+        dot.style.top = my + "px";
+      }
     }
     function lerpRing() {
       rx += (mx - rx) * 0.12;
       ry += (my - ry) * 0.12;
-      if (ring) { ring.style.left = rx + "px"; ring.style.top = ry + "px"; }
+      if (ring) {
+        ring.style.left = rx + "px";
+        ring.style.top = ry + "px";
+      }
       rafId = requestAnimationFrame(lerpRing);
     }
     if (!isTouchOnly) {
@@ -368,25 +379,28 @@ export default function LandingPage() {
     // 4 · Stats count-up
     const statsSection = document.getElementById("stats-section");
     let statsDone = false;
-    const statsObs = new IntersectionObserver((entries) => {
-      if (!entries[0].isIntersecting || statsDone) return;
-      statsDone = true;
-      document.querySelectorAll<HTMLElement>(".stat-num").forEach((el) => {
-        const target = parseFloat(el.dataset.target ?? "0");
-        const suffix = el.dataset.suffix ?? "";
-        const isFloat = String(target).includes(".");
-        const dur = 1800;
-        const t0 = performance.now();
-        function tick(now: number) {
-          const p = Math.min((now - t0) / dur, 1);
-          const ease = 1 - Math.pow(1 - p, 3);
-          const cur = target * ease;
-          el.textContent = (isFloat ? cur.toFixed(1) : Math.floor(cur).toLocaleString()) + suffix;
-          if (p < 1) requestAnimationFrame(tick);
-        }
-        requestAnimationFrame(tick);
-      });
-    }, { threshold: 0.5 });
+    const statsObs = new IntersectionObserver(
+      (entries) => {
+        if (!entries[0].isIntersecting || statsDone) return;
+        statsDone = true;
+        document.querySelectorAll<HTMLElement>(".stat-num").forEach((el) => {
+          const target = parseFloat(el.dataset.target ?? "0");
+          const suffix = el.dataset.suffix ?? "";
+          const isFloat = String(target).includes(".");
+          const dur = 1800;
+          const t0 = performance.now();
+          function tick(now: number) {
+            const p = Math.min((now - t0) / dur, 1);
+            const ease = 1 - Math.pow(1 - p, 3);
+            const cur = target * ease;
+            el.textContent = (isFloat ? cur.toFixed(1) : Math.floor(cur).toLocaleString()) + suffix;
+            if (p < 1) requestAnimationFrame(tick);
+          }
+          requestAnimationFrame(tick);
+        });
+      },
+      { threshold: 0.5 }
+    );
     if (statsSection) statsObs.observe(statsSection);
 
     // 5 · Step connector line draw
@@ -394,26 +408,32 @@ export default function LandingPage() {
     const stepsSection = document.getElementById("steps-section");
     let lineObs: IntersectionObserver | null = null;
     if (stepLine && stepsSection) {
-      lineObs = new IntersectionObserver((entries) => {
-        if (entries[0].isIntersecting) {
-          stepLine.classList.add("draw");
-          lineObs?.disconnect();
-        }
-      }, { threshold: 0.3 });
+      lineObs = new IntersectionObserver(
+        (entries) => {
+          if (entries[0].isIntersecting) {
+            stepLine.classList.add("draw");
+            lineObs?.disconnect();
+          }
+        },
+        { threshold: 0.3 }
+      );
       lineObs.observe(stepsSection);
     }
 
     // 6 · Fade-up elements
     const fadeEls = document.querySelectorAll<HTMLElement>(".fade-up");
-    const fadeObs = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (!entry.isIntersecting) return;
-        const el = entry.target as HTMLElement;
-        const delay = parseFloat(el.dataset.delay ?? "0") * 1000;
-        setTimeout(() => el.classList.add("visible"), delay);
-        fadeObs.unobserve(el);
-      });
-    }, { threshold: 0.1 });
+    const fadeObs = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          const el = entry.target as HTMLElement;
+          const delay = parseFloat(el.dataset.delay ?? "0") * 1000;
+          setTimeout(() => el.classList.add("visible"), delay);
+          fadeObs.unobserve(el);
+        });
+      },
+      { threshold: 0.1 }
+    );
     fadeEls.forEach((el) => fadeObs.observe(el));
 
     return () => {
@@ -449,9 +469,22 @@ export default function LandingPage() {
       <nav className={`es-nav${scrolled ? " scrolled" : ""}`}>
         <div className="nav-inner">
           {/* Logo */}
-          <a href="#" style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none" }}>
-            <div style={{ width: 8, height: 8, borderRadius: "50%", background: L, flexShrink: 0 }} />
-            <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 800, fontSize: 17, letterSpacing: "0.08em", color: "#fff" }}>
+          <a
+            href="#"
+            style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none" }}
+          >
+            <div
+              style={{ width: 8, height: 8, borderRadius: "50%", background: L, flexShrink: 0 }}
+            />
+            <span
+              style={{
+                fontFamily: "'DM Sans', sans-serif",
+                fontWeight: 800,
+                fontSize: 17,
+                letterSpacing: "0.08em",
+                color: "#fff",
+              }}
+            >
               ENFUCE SCREEN
             </span>
           </a>
@@ -464,7 +497,9 @@ export default function LandingPage() {
               ["Security", "#security"],
               ["Compliance", "#compliance"],
             ].map(([label, href]) => (
-              <a key={label} href={href} className="nav-link">{label}</a>
+              <a key={label} href={href} className="nav-link">
+                {label}
+              </a>
             ))}
           </div>
 
@@ -481,7 +516,15 @@ export default function LandingPage() {
             onClick={() => setMobileOpen((v) => !v)}
             aria-label={mobileOpen ? "Close menu" : "Open menu"}
           >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            >
               {mobileOpen ? (
                 <>
                   <line x1="6" y1="6" x2="18" y2="18" />
@@ -558,7 +601,8 @@ export default function LandingPage() {
           >
             <div style={{ width: 5, height: 5, borderRadius: "50%", background: L }} />
             <span style={{ fontSize: 12, color: TS, letterSpacing: "0.06em" }}>
-              Powered by <strong style={{ color: "#fff", fontWeight: 600 }}>Enfuce</strong> infrastructure
+              Powered by <strong style={{ color: "#fff", fontWeight: 600 }}>Enfuce</strong>{" "}
+              infrastructure
             </span>
           </div>
 
@@ -575,14 +619,19 @@ export default function LandingPage() {
             }}
           >
             {"Know exactly".split(" ").map((word, i) => (
-              <span key={`a${i}`} className="hw" style={{ marginRight: "0.22em" }}>{word}</span>
+              <span key={`a${i}`} className="hw" style={{ marginRight: "0.22em" }}>
+                {word}
+              </span>
             ))}
             <br />
             {"who you're".split(" ").map((word, i) => (
-              <span key={`b${i}`} className="hw" style={{ marginRight: "0.22em" }}>{word}</span>
-            ))}
-            {" "}
-            <span className="hw" style={{ color: L }}>screening.</span>
+              <span key={`b${i}`} className="hw" style={{ marginRight: "0.22em" }}>
+                {word}
+              </span>
+            ))}{" "}
+            <span className="hw" style={{ color: L }}>
+              screening.
+            </span>
           </h1>
 
           {/* Subheadline */}
@@ -596,7 +645,9 @@ export default function LandingPage() {
               lineHeight: 1.72,
             }}
           >
-            AI-powered sanctions & PEP screening for financial institutions. Three-layer intelligence pipeline — rules, AI, and human oversight — that reduces false positives by 99.7%.
+            AI-powered sanctions & PEP screening for financial institutions. Three-layer
+            intelligence pipeline — rules, AI, and human oversight — that reduces false positives by
+            99.7%.
           </p>
 
           {/* Buttons */}
@@ -604,7 +655,11 @@ export default function LandingPage() {
             <a href="#contact" className="btn-lime" style={{ fontSize: 15, padding: "14px 28px" }}>
               Request Access →
             </a>
-            <a href="#how-it-works" className="btn-ghost" style={{ fontSize: 15, padding: "14px 28px" }}>
+            <a
+              href="#how-it-works"
+              className="btn-ghost"
+              style={{ fontSize: 15, padding: "14px 28px" }}
+            >
               See how it works
             </a>
           </div>
@@ -651,7 +706,15 @@ export default function LandingPage() {
       ════════════════════════════════════════════════════════ */}
       <section id="how-it-works" style={{ padding: "120px 24px" }}>
         <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-          <p style={{ fontSize: 11, letterSpacing: "0.15em", color: L, textTransform: "uppercase", marginBottom: 14 }}>
+          <p
+            style={{
+              fontSize: 11,
+              letterSpacing: "0.15em",
+              color: L,
+              textTransform: "uppercase",
+              marginBottom: 14,
+            }}
+          >
             PROCESS
           </p>
           <h2
@@ -744,7 +807,15 @@ export default function LandingPage() {
           <div className="product-grid">
             {/* Left copy */}
             <div>
-              <p style={{ fontSize: 11, letterSpacing: "0.15em", color: L, textTransform: "uppercase", marginBottom: 14 }}>
+              <p
+                style={{
+                  fontSize: 11,
+                  letterSpacing: "0.15em",
+                  color: L,
+                  textTransform: "uppercase",
+                  marginBottom: 14,
+                }}
+              >
                 CASE REVIEW
               </p>
               <h2
@@ -759,9 +830,14 @@ export default function LandingPage() {
                 Every decision, fully explained.
               </h2>
               <p style={{ fontSize: 16, color: TS, lineHeight: 1.72, marginBottom: 36 }}>
-                Analysts see field-by-field match comparison, an AI confidence score, matching and conflicting signals, and cited source links — all in a single, frictionless panel.
+                Analysts see field-by-field match comparison, an AI confidence score, matching and
+                conflicting signals, and cited source links — all in a single, frictionless panel.
               </p>
-              <a href="#contact" className="btn-lime" style={{ fontSize: 14, padding: "12px 24px" }}>
+              <a
+                href="#contact"
+                className="btn-lime"
+                style={{ fontSize: 14, padding: "12px 24px" }}
+              >
                 See the dashboard →
               </a>
             </div>
@@ -779,7 +855,15 @@ export default function LandingPage() {
       ════════════════════════════════════════════════════════ */}
       <section id="security" style={{ padding: "0 24px 120px" }}>
         <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-          <p style={{ fontSize: 11, letterSpacing: "0.15em", color: L, textTransform: "uppercase", marginBottom: 14 }}>
+          <p
+            style={{
+              fontSize: 11,
+              letterSpacing: "0.15em",
+              color: L,
+              textTransform: "uppercase",
+              marginBottom: 14,
+            }}
+          >
             CAPABILITIES
           </p>
           <h2
@@ -795,11 +879,7 @@ export default function LandingPage() {
           </h2>
           <div className="feat-grid">
             {FEATURES.map((f, i) => (
-              <div
-                key={f.title}
-                className="feat-card fade-up"
-                data-delay={String(i * 0.06)}
-              >
+              <div key={f.title} className="feat-card fade-up" data-delay={String(i * 0.06)}>
                 <div
                   dangerouslySetInnerHTML={{ __html: f.icon }}
                   style={{ marginBottom: 20, lineHeight: 0 }}
@@ -863,10 +943,7 @@ export default function LandingPage() {
       {/* ════════════════════════════════════════════════════════
           CTA
       ════════════════════════════════════════════════════════ */}
-      <section
-        id="contact"
-        style={{ padding: "120px 24px", textAlign: "center" }}
-      >
+      <section id="contact" style={{ padding: "120px 24px", textAlign: "center" }}>
         <div style={{ maxWidth: 580, margin: "0 auto" }}>
           <h2
             style={{
@@ -880,7 +957,11 @@ export default function LandingPage() {
           >
             Ready to screen smarter?
           </h2>
-          <a href="mailto:screen@enfuce.com" className="btn-lime" style={{ fontSize: 16, padding: "16px 36px" }}>
+          <a
+            href="mailto:screen@enfuce.com"
+            className="btn-lime"
+            style={{ fontSize: 16, padding: "16px 36px" }}
+          >
             Request Access →
           </a>
         </div>
@@ -915,9 +996,7 @@ export default function LandingPage() {
             ENFUCE SCREEN
           </span>
         </div>
-        <span style={{ fontSize: 13, color: TM }}>
-          © 2026 Built on Enfuce infrastructure
-        </span>
+        <span style={{ fontSize: 13, color: TM }}>© 2026 Built on Enfuce infrastructure</span>
       </footer>
     </div>
   );
@@ -926,14 +1005,14 @@ export default function LandingPage() {
 // ─── Case Review Mock ─────────────────────────────────────────────────────────
 function CaseReviewMock() {
   const fields = [
-    { label: "Full Name",    customer: "Muhammad Al-Rashidi",  match: true  },
-    { label: "Date of Birth", customer: "1974-03-15",          match: true  },
-    { label: "Nationality",  customer: "Jordanian",            match: true  },
-    { label: "Passport No.", customer: "J08821445",            match: false },
-    { label: "Country",      customer: "Amman, Jordan",        match: false },
+    { label: "Full Name", customer: "Muhammad Al-Rashidi", match: true },
+    { label: "Date of Birth", customer: "1974-03-15", match: true },
+    { label: "Nationality", customer: "Jordanian", match: true },
+    { label: "Passport No.", customer: "J08821445", match: false },
+    { label: "Country", customer: "Amman, Jordan", match: false },
   ];
 
-  const matching   = ["Name similarity 94.2%", "DOB exact match", "Nationality match"];
+  const matching = ["Name similarity 94.2%", "DOB exact match", "Nationality match"];
   const conflicting = ["Passport digits differ", "Country mismatch"];
 
   return (
@@ -969,9 +1048,7 @@ function CaseReviewMock() {
           >
             Case #SAN-2847
           </div>
-          <div style={{ fontSize: 15, fontWeight: 600, color: "#fff" }}>
-            Muhammad Al-Rashidi
-          </div>
+          <div style={{ fontSize: 15, fontWeight: 600, color: "#fff" }}>Muhammad Al-Rashidi</div>
         </div>
         <div
           style={{
@@ -1079,9 +1156,7 @@ function CaseReviewMock() {
               overflow: "hidden",
             }}
           >
-            <div
-              style={{ width: "78%", height: "100%", background: L, borderRadius: 2 }}
-            />
+            <div style={{ width: "78%", height: "100%", background: L, borderRadius: 2 }} />
           </div>
 
           {/* Matching signals */}

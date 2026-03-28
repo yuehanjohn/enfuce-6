@@ -1,7 +1,7 @@
-// Layer 2 — AI Warehouse Processing
-// Uses Snowflake Cortex COMPLETE() + Brave Search for reasoning
+// Layer 2 — AI Processing
+// Uses OpenRouter for LLM reasoning + Bright Data for web search
 
-import { cortexCompleteWithSearch } from "@/lib/cortex";
+import { openrouterCompleteWithSearch } from "@/lib/openrouter";
 import type { Customer, SanctionsEntry, Layer1Flag, Layer2Result } from "@/types/screening";
 import { routeByConfidence } from "./routing";
 
@@ -81,7 +81,7 @@ interface AIAnalysis {
 export async function processCase(input: Layer2Input): Promise<Layer2Result> {
   const searchQuery = `${input.customer.full_name} ${input.sanctions.entity_name} sanctions`;
 
-  const { text, searchResults } = await cortexCompleteWithSearch({
+  const { text, searchResults } = await openrouterCompleteWithSearch({
     systemPrompt: SYSTEM_PROMPT,
     userPrompt: buildUserPrompt(input),
     searchQuery,
