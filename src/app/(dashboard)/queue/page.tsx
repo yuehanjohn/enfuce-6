@@ -24,15 +24,36 @@ interface QueueEntry {
 export default function QueuePage() {
   const [queue, setQueue] = useState<QueueEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadQueue = async () => {
+    setLoading(true);
+    setError(null);
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
+    try {
+      const response = await fetch("/api/screening/queue", { signal: controller.signal });
+      if (!response.ok) {
+        throw new Error(`Queue request failed (${response.status})`);
+      }
+      const data = await response.json();
+      setQueue(Array.isArray(data.queue) ? data.queue : []);
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") {
+        setError("Queue request timed out. Snowflake may still be waking up. Please retry.");
+      } else {
+        setError("Failed to load queue. Please retry.");
+      }
+    } finally {
+      clearTimeout(timeout);
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    fetch("/api/screening/queue")
-      .then((r) => r.json())
-      .then((data) => {
-        setQueue(data.queue);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+    void loadQueue();
   }, []);
 
   return (
@@ -58,12 +79,34 @@ export default function QueuePage() {
         <div className="flex items-center justify-center py-12">
           <div className="text-default-500">Loading queue...</div>
         </div>
+      ) : error ? (
+        <Card>
+          <Card.Content>
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <p className="text-lg font-medium">Queue unavailable</p>
+              <p className="text-sm text-default-500 mt-1">{error}</p>
+              <Button variant="primary" className="mt-4" onPress={loadQueue}>
+                Retry
+              </Button>
+            </div>
+          </Card.Content>
+        </Card>
       ) : queue.length === 0 ? (
         <Card>
           <Card.Content>
             <div className="flex flex-col items-center justify-center py-12 text-center">
-              <svg className="h-12 w-12 text-default-300 mb-4" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+              <svg
+                className="h-12 w-12 text-default-300 mb-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1}
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+                />
               </svg>
               <p className="text-lg font-medium">Queue is empty</p>
               <p className="text-sm text-default-500 mt-1">
@@ -87,13 +130,15 @@ export default function QueuePage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <h3 className="font-semibold truncate">{item.customer_name}</h3>
-                      <span className={`shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                        item.status === "PENDING"
-                          ? "bg-warning-50 text-warning"
-                          : item.status === "IN_REVIEW"
-                            ? "bg-primary-50 text-primary"
-                            : "bg-success-50 text-success"
-                      }`}>
+                      <span
+                        className={`shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                          item.status === "PENDING"
+                            ? "bg-warning-50 text-warning"
+                            : item.status === "IN_REVIEW"
+                              ? "bg-primary-50 text-primary"
+                              : "bg-success-50 text-success"
+                        }`}
+                      >
                         {item.status}
                       </span>
                     </div>

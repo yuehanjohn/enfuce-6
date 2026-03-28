@@ -40,7 +40,7 @@ export default function ScreeningPage() {
       const res = await fetch("/api/screening/layer2", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mock: true }),
+        body: JSON.stringify({ mock: false }),
       });
       const data = await res.json();
       setLayer2Results(data.results);
@@ -64,18 +64,27 @@ export default function ScreeningPage() {
         <Card className={stage === "layer1" ? "border-2 border-primary" : ""}>
           <Card.Header>
             <div className="flex w-full items-center gap-2">
-              <div className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
-                stage === "idle" ? "bg-default-200 text-default-500" :
-                stage === "layer1" ? "bg-primary text-white" :
-                "bg-success text-white"
-              }`}>1</div>
+              <div
+                className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
+                  stage === "idle"
+                    ? "bg-default-200 text-default-500"
+                    : stage === "layer1"
+                      ? "bg-primary text-white"
+                      : "bg-success text-white"
+                }`}
+              >
+                1
+              </div>
               <Card.Title>Hard Rule Engine</Card.Title>
             </div>
           </Card.Header>
           <Card.Content>
             <p className="text-sm text-default-500 mb-4">
-              Deterministic SQL-based screening. Fuzzy name match + DOB + nationality scoring against{" "}
-              <code className="text-xs bg-default-100 px-1 rounded">GLOBAL_SANCTIONS_DATA.SANCTIONS_DATAFEED</code>
+              Deterministic SQL-based screening. Fuzzy name match + DOB + nationality scoring
+              against{" "}
+              <code className="text-xs bg-default-100 px-1 rounded">
+                GLOBAL_SANCTIONS_DATA.SANCTIONS_DATAFEED
+              </code>
             </p>
             {stage === "idle" && (
               <Button variant="primary" className="w-full" onPress={runLayer1}>
@@ -107,17 +116,24 @@ export default function ScreeningPage() {
         <Card className={stage === "layer2" ? "border-2 border-primary" : ""}>
           <Card.Header>
             <div className="flex w-full items-center gap-2">
-              <div className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
-                ["idle", "layer1"].includes(stage) ? "bg-default-200 text-default-500" :
-                stage === "layer2" ? "bg-primary text-white" :
-                "bg-success text-white"
-              }`}>2</div>
+              <div
+                className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
+                  ["idle", "layer1"].includes(stage)
+                    ? "bg-default-200 text-default-500"
+                    : stage === "layer2"
+                      ? "bg-primary text-white"
+                      : "bg-success text-white"
+                }`}
+              >
+                2
+              </div>
               <Card.Title>AI Warehouse</Card.Title>
             </div>
           </Card.Header>
           <Card.Content>
             <p className="text-sm text-default-500 mb-4">
-              Snowflake Cortex AI + Brave Search researches each flagged case. Produces reasoning trail + confidence score + routing decision.
+              Snowflake Cortex AI + Brave Search researches each flagged case. Produces reasoning
+              trail + confidence score + routing decision.
             </p>
             {stage === "layer1_done" && (
               <Button variant="primary" className="w-full" onPress={runLayer2}>
@@ -162,15 +178,22 @@ export default function ScreeningPage() {
         <Card>
           <Card.Header>
             <div className="flex w-full items-center gap-2">
-              <div className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
-                stage === "layer2_done" ? "bg-warning text-white" : "bg-default-200 text-default-500"
-              }`}>3</div>
+              <div
+                className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
+                  stage === "layer2_done"
+                    ? "bg-warning text-white"
+                    : "bg-default-200 text-default-500"
+                }`}
+              >
+                3
+              </div>
               <Card.Title>Human Review</Card.Title>
             </div>
           </Card.Header>
           <Card.Content>
             <p className="text-sm text-default-500 mb-4">
-              Analyst dashboard for 10–90% confidence cases. Full reasoning trail, source links, and AI chat assistant.
+              Analyst dashboard for 10–90% confidence cases. Full reasoning trail, source links, and
+              AI chat assistant.
             </p>
             {stage === "layer2_done" && layer2Summary ? (
               <a href="/queue">
@@ -213,13 +236,15 @@ export default function ScreeningPage() {
                         <ConfidenceMeter confidence={r.ai_confidence} size="sm" />
                       </td>
                       <td className="py-3">
-                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                          r.routing === "AUTO_RESTRICT"
-                            ? "bg-danger-50 text-danger"
-                            : r.routing === "AUTO_CLEAR"
-                              ? "bg-success-50 text-success"
-                              : "bg-warning-50 text-warning"
-                        }`}>
+                        <span
+                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                            r.routing === "AUTO_RESTRICT"
+                              ? "bg-danger-50 text-danger"
+                              : r.routing === "AUTO_CLEAR"
+                                ? "bg-success-50 text-success"
+                                : "bg-warning-50 text-warning"
+                          }`}
+                        >
                           {r.routing.replace("_", " ")}
                         </span>
                       </td>

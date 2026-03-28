@@ -6,15 +6,13 @@ import {
   runLayer2Processing as sfRunLayer2,
   fetchLayer2Results as sfFetchResults,
 } from "@/lib/screening/snowflake-queries";
-import {
-  MOCK_LAYER2_RESULTS,
-  auditLog,
-} from "@/lib/screening/data";
+import { MOCK_LAYER2_RESULTS, auditLog } from "@/lib/screening/data";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
-    const useMock = body.mock !== false;
+    // Default behavior: use real Snowflake processing when available unless explicitly overridden.
+    const useMock = typeof body.mock === "boolean" ? body.mock : !hasSnowflakeConnection();
 
     // Real Snowflake mode
     if (hasSnowflakeConnection() && !useMock) {
@@ -61,7 +59,7 @@ export async function POST(request: Request) {
     console.error("Layer 2 processing error:", error);
     return NextResponse.json(
       { error: "Layer 2 processing failed", details: String(error) },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }
@@ -71,5 +69,9 @@ export async function GET() {
     const results = await sfFetchResults();
     return NextResponse.json({ results, count: results.length, source: "snowflake" });
   }
-  return NextResponse.json({ results: MOCK_LAYER2_RESULTS, count: MOCK_LAYER2_RESULTS.length, source: "mock" });
+  return NextResponse.json({
+    results: MOCK_LAYER2_RESULTS,
+    count: MOCK_LAYER2_RESULTS.length,
+    source: "mock",
+  });
 }

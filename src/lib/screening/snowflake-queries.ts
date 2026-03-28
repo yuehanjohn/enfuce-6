@@ -98,7 +98,9 @@ export async function fetchSanctionsEntryById(id: string): Promise<SanctionsEntr
     vessel_flag: r.vessel_flag || null,
     vessel_owner: r.vessel_owner || null,
     gross_tonnage: r.gross_tonnage || null,
-    gross_registered_tonnage: r.gross_registered_tonnage ? Number(r.gross_registered_tonnage) : null,
+    gross_registered_tonnage: r.gross_registered_tonnage
+      ? Number(r.gross_registered_tonnage)
+      : null,
   };
 }
 
@@ -149,32 +151,67 @@ export async function fetchLayer1ByCustomer(customerId: string): Promise<Layer1F
 
 export async function runLayer1Screening(): Promise<{ flagCount: number; customerCount: number }> {
   // Count customers first
-  const countResult = await executeQuery<{ cnt: string }>(`SELECT COUNT(*) AS cnt FROM CUSTOMERS.ONBOARDING`);
+  const countResult = await executeQuery<{ cnt: string }>(
+    `SELECT COUNT(*) AS cnt FROM CUSTOMERS.ONBOARDING`
+  );
   const customerCount = Number(countResult.rows[0]?.cnt ?? 0);
 
-  // Run the screening query (same as seed/003_run_layer1.sql)
+  // Keep Layer 1 deterministic for each run.
+  await executeStatement(`TRUNCATE TABLE SCREENING.LAYER1_FLAGS`);
+
+  // Run the screening query (same structure as seed/003_run_layer1.sql)
   await executeStatement(`
     INSERT INTO SCREENING.LAYER1_FLAGS (flag_id, customer_id, entity_id, composite_score, name_score, dob_score, nationality_score)
-    WITH scored AS (
+  WITH base AS (
         SELECT
-            c.customer_id, w.entity_id,
-            SCREENING.JARO_WINKLER_SIMILARITY(c.full_name, w.entity_name) AS name_sim,
-            CASE WHEN SCREENING.JARO_WINKLER_SIMILARITY(c.full_name, w.entity_name) >= 0.92 THEN 70
-                 WHEN SCREENING.JARO_WINKLER_SIMILARITY(c.full_name, w.entity_name) >= 0.82 THEN 50
-                 ELSE 0 END AS name_points,
-            CASE WHEN EXISTS (
-                SELECT 1 FROM TABLE(SPLIT_TO_TABLE(w.entity_aliases, ';')) AS a
-                WHERE SCREENING.JARO_WINKLER_SIMILARITY(c.full_name, TRIM(a.VALUE)) >= 0.82
-            ) THEN 25 ELSE 0 END AS alias_points,
-            CASE WHEN c.dob IS NULL OR w.dob IS NULL THEN 0
-                 WHEN c.dob = w.dob THEN 30
-                 WHEN ABS(DATEDIFF('year', c.dob, w.dob)) <= 1 THEN 15
+      c.customer_id,
+      c.full_name,
+      c.dob AS customer_dob,
+      c.nationality,
+      w.entity_id,
+      w.entity_name,
+      w.entity_aliases,
+      w.dob AS watchlist_dob,
+      w.nationality_country,
+      w.citizenship_country,
+      SCREENING.JARO_WINKLER_SIMILARITY(c.full_name, w.entity_name) AS name_sim
+    FROM CUSTOMERS.ONBOARDING c
+    CROSS JOIN WATCHLIST.SANCTIONS_PEP w
+  ),
+  alias_scores AS (
+    SELECT
+      b.customer_id,
+      b.entity_id,
+      MAX(
+        SCREENING.JARO_WINKLER_SIMILARITY(
+          b.full_name,
+          TRIM(a.VALUE)
+        )
+      ) AS best_alias_sim
+    FROM base b,
+       LATERAL SPLIT_TO_TABLE(b.entity_aliases, ';') a
+    GROUP BY b.customer_id, b.entity_id
+  ),
+  scored AS (
+    SELECT
+      b.customer_id,
+      b.entity_id,
+      b.name_sim,
+      CASE WHEN b.name_sim >= 0.92 THEN 70
+           WHEN b.name_sim >= 0.82 THEN 50
+           ELSE 0 END AS name_points,
+      CASE WHEN COALESCE(a.best_alias_sim, 0) >= 0.82 THEN 25 ELSE 0 END AS alias_points,
+      CASE WHEN b.customer_dob IS NULL OR b.watchlist_dob IS NULL THEN 0
+         WHEN b.customer_dob = b.watchlist_dob THEN 30
+         WHEN ABS(DATEDIFF('year', b.customer_dob, b.watchlist_dob)) <= 1 THEN 15
                  ELSE 0 END AS dob_points,
-            CASE WHEN c.nationality IS NULL OR COALESCE(w.nationality_country, w.citizenship_country) IS NULL THEN 0
-                 WHEN UPPER(c.nationality) = UPPER(COALESCE(w.nationality_country, w.citizenship_country)) THEN 20
+      CASE WHEN b.nationality IS NULL OR COALESCE(b.nationality_country, b.citizenship_country) IS NULL THEN 0
+         WHEN UPPER(b.nationality) = UPPER(COALESCE(b.nationality_country, b.citizenship_country)) THEN 20
                  ELSE -10 END AS nat_points
-        FROM CUSTOMERS.ONBOARDING c
-        CROSS JOIN WATCHLIST.SANCTIONS_PEP w
+    FROM base b
+    LEFT JOIN alias_scores a
+      ON b.customer_id = a.customer_id
+     AND b.entity_id = a.entity_id
     )
     SELECT 'FLAG-' || customer_id || '-' || entity_id, customer_id, entity_id,
            name_points + alias_points + dob_points + nat_points, name_sim, dob_points, nat_points
@@ -182,7 +219,9 @@ export async function runLayer1Screening(): Promise<{ flagCount: number; custome
     WHERE name_points + alias_points + dob_points + nat_points >= 50
   `);
 
-  const flagResult = await executeQuery<{ cnt: string }>(`SELECT COUNT(*) AS cnt FROM SCREENING.LAYER1_FLAGS`);
+  const flagResult = await executeQuery<{ cnt: string }>(
+    `SELECT COUNT(*) AS cnt FROM SCREENING.LAYER1_FLAGS`
+  );
   const flagCount = Number(flagResult.rows[0]?.cnt ?? 0);
 
   return { flagCount, customerCount };
@@ -238,7 +277,12 @@ export async function fetchLayer2ByResultId(id: string): Promise<Layer2Result | 
   };
 }
 
-export async function runLayer2Processing(): Promise<{ total: number; auto_restrict: number; auto_clear: number; human_review: number }> {
+export async function runLayer2Processing(): Promise<{
+  total: number;
+  auto_restrict: number;
+  auto_clear: number;
+  human_review: number;
+}> {
   // Call the stored procedure
   await executeStatement(`CALL SCREENING.PROCESS_LAYER2_BATCH()`);
 
@@ -259,7 +303,19 @@ export async function runLayer2Processing(): Promise<{ total: number; auto_restr
 
 // ── Queue ───────────────────────────────────────────────────────────
 
-export async function fetchQueue(): Promise<(QueueItem & { customer_name: string; customer_nationality: string; customer_dob: string; entity_name: string; list_source: string; reasoning_summary: string })[]> {
+export async function fetchQueue(
+  limit = 25
+): Promise<
+  (QueueItem & {
+    customer_name: string;
+    customer_nationality: string;
+    customer_dob: string;
+    entity_name: string;
+    list_source: string;
+    reasoning_summary: string;
+  })[]
+> {
+  const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(100, Math.floor(limit))) : 25;
   const result = await executeQuery<Record<string, string>>(`
     SELECT q.queue_id, q.result_id, q.customer_id, q.entity_id, q.ai_confidence,
            q.assigned_to, TO_CHAR(q.queued_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS queued_at,
@@ -267,13 +323,13 @@ export async function fetchQueue(): Promise<(QueueItem & { customer_name: string
            c.full_name AS customer_name, c.nationality AS customer_nationality,
            TO_CHAR(c.dob, 'YYYY-MM-DD') AS customer_dob,
            w.entity_name, w.authority || ' - ' || w.list_name AS list_source,
-           LEFT(l2.reasoning, 150) AS reasoning_summary
+           '' AS reasoning_summary
     FROM QUEUE.PENDING_REVIEW q
     JOIN CUSTOMERS.ONBOARDING c ON c.customer_id = q.customer_id
     JOIN WATCHLIST.SANCTIONS_PEP w ON w.entity_id = q.entity_id
-    LEFT JOIN SCREENING.LAYER2_RESULTS l2 ON l2.result_id = q.result_id
     WHERE q.status != 'DECIDED'
-    ORDER BY q.ai_confidence DESC
+    ORDER BY q.queued_at DESC
+    LIMIT ${safeLimit}
   `);
   return result.rows.map((r) => ({
     queue_id: r.queue_id,

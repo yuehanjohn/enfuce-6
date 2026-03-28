@@ -214,8 +214,8 @@ export async function executeQuery<T = Record<string, unknown>>(
 
   let result = await response.json();
 
-  // If async execution, poll for completion using same token to avoid drift
-  if (result.code === "090001" && result.statementHandle) {
+  // Poll only when Snowflake returned async status without result rows yet.
+  if (result.code === "090001" && result.statementHandle && !Array.isArray(result.data)) {
     result = await pollForResult(result.statementHandle, config, authToken);
   }
 

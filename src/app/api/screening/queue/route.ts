@@ -1,6 +1,9 @@
 // GET /api/screening/queue — Return pending review queue
 import { NextResponse } from "next/server";
-import { hasSnowflakeConnection, fetchQueue as sfFetchQueue } from "@/lib/screening/snowflake-queries";
+import {
+  hasSnowflakeConnection,
+  fetchQueue as sfFetchQueue,
+} from "@/lib/screening/snowflake-queries";
 import {
   MOCK_QUEUE,
   findCustomer,
@@ -8,10 +11,22 @@ import {
   findLayer2Result,
 } from "@/lib/screening/data";
 
-export async function GET() {
+export async function GET(request: Request) {
   if (hasSnowflakeConnection()) {
-    const queue = await sfFetchQueue();
-    return NextResponse.json({ queue, count: queue.length, source: "snowflake" });
+    const { searchParams } = new URL(request.url);
+    const limit = Number(searchParams.get("limit") ?? "25");
+    try {
+      const queue = await Promise.race([
+        sfFetchQueue(limit),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Queue fetch timed out")), 12000)
+        ),
+      ]);
+      return NextResponse.json({ queue, count: queue.length, source: "snowflake" });
+    } catch (error) {
+      console.error("Queue fetch error:", error);
+      return NextResponse.json({ queue: [], count: 0, source: "snowflake-timeout" });
+    }
   }
 
   // Mock mode
