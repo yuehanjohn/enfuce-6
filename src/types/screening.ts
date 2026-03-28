@@ -107,12 +107,19 @@ export interface Layer2Result {
   flag_id: string;
   customer_id: string;
   entity_id: string;
+  /** Raw AI confidence: 0–100, how likely the customer IS the sanctioned entity */
   ai_confidence: number;
+  /** Weighted blend of Layer 1 (normalised) + ai_confidence — used for routing */
+  combined_score: number;
   routing: RoutingDecision;
   reasoning: string;
   matching_signals: string[];
   conflicting_signals: string[];
   sources: Source[];
+  /** Summary of online research findings about the customer */
+  customer_background: string;
+  /** Summary of online research findings about the sanctions entity */
+  sanctions_background: string;
   processed_at: string;
 }
 

@@ -89,6 +89,27 @@ export async function braveSearch(query: string, maxResults = 5): Promise<Search
   }
 }
 
+// ── Multi-query Brave Search ─────────────────────────────────────────
+
+/**
+ * Run multiple Brave searches in parallel and return deduplicated results.
+ * Use this when you need separate research on two different subjects.
+ */
+export async function multiSearch(queries: string[], maxResultsEach = 5): Promise<SearchResult[]> {
+  const allResults = await Promise.all(queries.map((q) => braveSearch(q, maxResultsEach)));
+  const seen = new Set<string>();
+  const deduped: SearchResult[] = [];
+  for (const batch of allResults) {
+    for (const r of batch) {
+      if (!seen.has(r.url)) {
+        seen.add(r.url);
+        deduped.push(r);
+      }
+    }
+  }
+  return deduped;
+}
+
 // ── Cortex Complete with search context ─────────────────────────────
 
 export async function cortexCompleteWithSearch({
@@ -113,8 +134,11 @@ export async function cortexCompleteWithSearch({
   if (searchQuery) {
     searchResults = await braveSearch(searchQuery);
     if (searchResults.length > 0) {
-      searchContext = "\n\n## Web Search Results\n" +
-        searchResults.map((r, i) => `${i + 1}. **${r.title}** (${r.url})\n   ${r.snippet}`).join("\n\n");
+      searchContext =
+        "\n\n## Web Search Results\n" +
+        searchResults
+          .map((r, i) => `${i + 1}. **${r.title}** (${r.url})\n   ${r.snippet}`)
+          .join("\n\n");
     }
   }
 
@@ -172,7 +196,7 @@ Help the analyst by answering their questions. Be concise and factual. Cite sour
 
 export async function getChatResponse(
   reviewCase: ReviewCase,
-  messages: ChatMessage[],
+  messages: ChatMessage[]
 ): Promise<string> {
   const systemPrompt = buildChatSystemPrompt(reviewCase);
 
@@ -183,8 +207,18 @@ export async function getChatResponse(
 
   // Determine if user is asking for a search
   const lastMessage = messages[messages.length - 1];
-  const searchKeywords = ["find", "search", "news", "recent", "court", "record", "article", "report"];
-  const needsSearch = lastMessage.role === "user" &&
+  const searchKeywords = [
+    "find",
+    "search",
+    "news",
+    "recent",
+    "court",
+    "record",
+    "article",
+    "report",
+  ];
+  const needsSearch =
+    lastMessage.role === "user" &&
     searchKeywords.some((kw) => lastMessage.content.toLowerCase().includes(kw));
 
   const searchQuery = needsSearch
@@ -199,9 +233,7 @@ export async function getChatResponse(
 
   // Append search results as citations if found
   if (searchResults.length > 0) {
-    const citations = searchResults
-      .map((r) => `- [${r.title}](${r.url})`)
-      .join("\n");
+    const citations = searchResults.map((r) => `- [${r.title}](${r.url})`).join("\n");
     return `${text}\n\n**Sources:**\n${citations}`;
   }
 

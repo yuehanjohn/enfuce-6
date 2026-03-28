@@ -607,7 +607,6 @@ export default function LandingPage() {
               infrastructure
             </span>
           </div>
-
           {/* Headline — split into words for stagger */}
           <h1
             style={{
@@ -635,7 +634,6 @@ export default function LandingPage() {
               screening.
             </span>
           </h1>
-
           {/* Subheadline */}
           <p
             className="hw"
@@ -650,8 +648,7 @@ export default function LandingPage() {
             AI-powered sanctions & PEP screening for financial institutions. Three-layer
             intelligence pipeline — rules, AI, and human oversight — that reduces false positives by
             99.7%.
-          </p>
-
+          </p>{" "}
           {/* Buttons */}
           <div className="hero-btns hw" style={{ marginBottom: 60 }}>
             <a href="/login" className="btn-lime" style={{ fontSize: 15, padding: "14px 28px" }}>

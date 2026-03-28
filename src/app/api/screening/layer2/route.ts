@@ -1,32 +1,58 @@
-// POST /api/screening/layer2 — Trigger Layer 2 AI processing
-// GET /api/screening/layer2 — Return Layer 2 results
+// POST /api/screening/layer2 — Run Layer 2 AI processing pipeline
+// GET  /api/screening/layer2 — Return stored Layer 2 results
 import { NextResponse } from "next/server";
 import {
   hasSnowflakeConnection,
-  runLayer2Processing as sfRunLayer2,
+  fetchLayer1Flags,
+  buildLayer2Inputs,
+  saveLayer2Results,
+  runLayer2Processing,
   fetchLayer2Results as sfFetchResults,
 } from "@/lib/screening/snowflake-queries";
+import { processBatch } from "@/lib/screening/layer2";
 import { MOCK_LAYER2_RESULTS, auditLog } from "@/lib/screening/data";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
-    // Default behavior: use real Snowflake processing when available unless explicitly overridden.
     const useMock = typeof body.mock === "boolean" ? body.mock : !hasSnowflakeConnection();
 
-    // Real Snowflake mode
+    // ── Real Snowflake mode ──────────────────────────────────────────
     if (hasSnowflakeConnection() && !useMock) {
-      const summary = await sfRunLayer2();
-      const results = await sfFetchResults();
+      // 1. Fetch all Layer 1 flags
+      const flags = await fetchLayer1Flags();
+      if (flags.length === 0) {
+        return NextResponse.json({
+          success: true,
+          results: [],
+          summary: { total: 0, auto_restrict: 0, auto_clear: 0, human_review: 0 },
+          message: "No Layer 1 flags found. Run Layer 1 screening first.",
+          source: "snowflake",
+        });
+      }
+
+      // 2. Resolve customer + sanctions data for each flag
+      const inputs = await buildLayer2Inputs(flags);
+
+      // 3. Run AI processing (Cortex COMPLETE + dual Brave Search per case)
+      const results = await processBatch(inputs);
+
+      // 4. Persist results + handle auto routing (restrict/clear/queue)
+      await saveLayer2Results(results);
+
+      // 5. Return summary from database (authoritative count after writes)
+      const summary = await runLayer2Processing();
+      const allResults = await sfFetchResults();
+
       return NextResponse.json({
         success: true,
-        results,
+        results: allResults,
         summary,
         source: "snowflake",
       });
     }
 
-    // Mock mode — return pre-computed results
+    // ── Mock mode ────────────────────────────────────────────────────
     for (const result of MOCK_LAYER2_RESULTS) {
       auditLog.push({
         log_id: `AUDIT-L2-${result.result_id}-${Date.now()}`,
@@ -36,6 +62,7 @@ export async function POST(request: Request) {
         payload: {
           result_id: result.result_id,
           ai_confidence: result.ai_confidence,
+          combined_score: result.combined_score,
           routing: result.routing,
         },
         analyst_id: null,

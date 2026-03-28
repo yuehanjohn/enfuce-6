@@ -256,6 +256,9 @@ export const MOCK_LAYER1_FLAGS: Layer1Flag[] = [
 ];
 
 // ── Layer 2 Results (AI processing output) ──────────────────────────
+// combined_score = (layer1_normalized * 0.3) + (ai_confidence * 0.7)
+// layer1_normalized = Math.min(100, composite_score / 120 * 100)
+// Routing thresholds: autoRestrict >= 85, autoClear <= 20
 
 export const MOCK_LAYER2_RESULTS: Layer2Result[] = [
   {
@@ -264,14 +267,33 @@ export const MOCK_LAYER2_RESULTS: Layer2Result[] = [
     customer_id: "AAAAAAAAGOKAAAAA",
     entity_id: "OFAC-12345",
     ai_confidence: 58,
+    // layer1_norm=(85/120*100)=70.8 → combined=(70.8*0.3)+(58*0.7)=21.2+40.6=62
+    combined_score: 62,
     routing: "HUMAN_REVIEW",
     reasoning:
-      "Name and nationality match exactly. DOB differs by 2 years — could indicate data entry error or deliberate obfuscation. Online search found no public reporting linking this individual to financial crimes. OFAC record cites 2023 designation for financial facilitation. Alias 'Ahmad Hassan' matches customer's known alias per bank records. Insufficient certainty to auto-restrict or auto-clear.",
-    matching_signals: ["name_exact", "nationality_match", "alias_partial_match"],
-    conflicting_signals: ["dob_2yr_discrepancy", "no_public_corroboration"],
+      "Step 1 — Customer profile: Online research for Ahmad Al-Hassan (Lebanon, 1978) returns no notable results connecting this individual to financial crime, sanctions, or illicit networks. Social media profiles suggest a private individual. Step 2 — Sanctions entity profile: The OFAC-designated Ahmad Al-Hassan was listed in January 2023 for providing financial facilitation services to designated entities in the Middle East. Reuters and regional news outlets covered the designation. Step 3 — Cross-comparison: Name and nationality match exactly. DOB differs by 2 years (customer: 1978-03-15 vs. sanctioned: 1976-05-20) — this could be a transcription error or deliberate obfuscation, but is also consistent with a false positive. The alias 'Ahmad Hassan' on the watchlist partially matches. Step 4 — Assessment: Insufficient certainty to auto-restrict or auto-clear. The DOB discrepancy is meaningful but not definitive. Human review required to verify identity documents.",
+    matching_signals: [
+      "Name exact match",
+      "Nationality match (Lebanon)",
+      "Partial alias overlap: 'Ahmad Hassan'",
+    ],
+    conflicting_signals: [
+      "DOB 2-year discrepancy (1978 vs 1976)",
+      "No corroborating public reporting linking customer to designation",
+    ],
+    customer_background:
+      "Online research for Ahmad Al-Hassan from Lebanon (born ~1978) returns no notable results. No news coverage, public records, or open-source intelligence links this individual to financial crime or sanctioned networks.",
+    sanctions_background:
+      "OFAC designated Ahmad Al-Hassan in January 2023 for providing financial facilitation services to designated entities in the Middle East region. Reuters and Al-Monitor covered the designation. Entity is based in Beirut, born 1976-05-20 in Tripoli.",
     sources: [
-      { label: "OFAC SDN Designation Notice — Jan 2023", url: "https://ofac.treasury.gov/recent-actions/20230115" },
-      { label: "Reuters — OFAC designates Lebanese financial facilitator", url: "https://reuters.com/world/middle-east/ofac-sanctions-2023-01-15" },
+      {
+        label: "OFAC SDN Designation Notice — Jan 2023",
+        url: "https://ofac.treasury.gov/recent-actions/20230115",
+      },
+      {
+        label: "Reuters — OFAC designates Lebanese financial facilitator",
+        url: "https://reuters.com/world/middle-east/ofac-sanctions-2023-01-15",
+      },
     ],
     processed_at: "2026-03-27T08:10:00Z",
   },
@@ -281,15 +303,36 @@ export const MOCK_LAYER2_RESULTS: Layer2Result[] = [
     customer_id: "AAAAAAAABPKAAAAA",
     entity_id: "OFAC-67890",
     ai_confidence: 95,
+    // layer1_norm=(120/120*100)=100 → combined=(100*0.3)+(95*0.7)=30+66.5=97
+    combined_score: 97,
     routing: "AUTO_RESTRICT",
     reasoning:
-      "Very high confidence match. Full name 'Viktor Petrov' closely matches sanctioned 'Viktor Sergeyevich Petrov'. Exact DOB match (1965-11-22). Nationality matches (Russian Federation). Multiple independent sources corroborate: Reuters and Financial Times both report on this individual's designation under E.O. 14024. Customer's passport number format consistent with Russian Federation issuance. Auto-restricting based on overwhelming evidence.",
-    matching_signals: ["name_high_similarity", "dob_exact", "nationality_match", "multiple_source_corroboration"],
+      "Step 1 — Customer profile: Online research for Viktor Petrov (Russia, 1965) surfaces multiple financial news articles. One Reuters article from June 2022 specifically names a Viktor Petrov in the context of Russian oligarch network sanctions under E.O. 14024. The described individual operates in the financial services sector, consistent with the customer's profile. Step 2 — Sanctions entity profile: OFAC designated Viktor Sergeyevich Petrov in June 2022 under E.O. 14024 as part of expanded sanctions on Russia's financial services sector. Multiple credible outlets (Reuters, Financial Times, Bloomberg) reported on this designation and described his role in the oligarch network. Step 3 — Cross-comparison: Full name 'Viktor Petrov' (customer) closely matches 'Viktor Sergeyevich Petrov' (sanctioned) with Jaro-Winkler similarity 0.88. DOB is an exact match (1965-11-22). Nationality matches (Russian Federation). The alias 'Viktor Petrov' on the watchlist exactly matches the customer's provided name. Multiple independent news sources corroborate the link. Step 4 — Assessment: Overwhelming evidence of match. Auto-restricting.",
+    matching_signals: [
+      "Name high similarity (Jaro-Winkler 0.88)",
+      "DOB exact match (1965-11-22)",
+      "Nationality match (Russia)",
+      "Alias 'Viktor Petrov' exact match",
+      "Multiple independent news sources corroborate",
+    ],
     conflicting_signals: [],
+    customer_background:
+      "Online research returns multiple financial news articles mentioning a Viktor Petrov from Russia in the context of OFAC sanctions and oligarch networks. A Reuters article from June 2022 specifically names this individual in connection with E.O. 14024 designations.",
+    sanctions_background:
+      "Viktor Sergeyevich Petrov was designated by OFAC in June 2022 under E.O. 14024 for operating in the financial services sector of the Russian Federation and for his role in an oligarch network. Reuters, Financial Times, and Bloomberg all reported on the designation.",
     sources: [
-      { label: "OFAC SDN Designation — June 2022", url: "https://ofac.treasury.gov/recent-actions/20220610" },
-      { label: "Reuters — Russia sanctions expansion", url: "https://reuters.com/business/finance/russia-sanctions-2022" },
-      { label: "Financial Times — Oligarch network exposed", url: "https://ft.com/content/russia-oligarch-network-2022" },
+      {
+        label: "OFAC SDN Designation — June 2022",
+        url: "https://ofac.treasury.gov/recent-actions/20220610",
+      },
+      {
+        label: "Reuters — Russia sanctions expansion",
+        url: "https://reuters.com/business/finance/russia-sanctions-2022",
+      },
+      {
+        label: "Financial Times — Oligarch network exposed",
+        url: "https://ft.com/content/russia-oligarch-network-2022",
+      },
     ],
     processed_at: "2026-03-27T08:10:00Z",
   },
@@ -299,13 +342,28 @@ export const MOCK_LAYER2_RESULTS: Layer2Result[] = [
     customer_id: "AAAAAAAACNKAAAAA",
     entity_id: "UN-54321",
     ai_confidence: 6,
+    // layer1_norm=(50/120*100)=41.7 → combined=(41.7*0.3)+(6*0.7)=12.5+4.2=17
+    combined_score: 17,
     routing: "AUTO_CLEAR",
     reasoning:
-      "Very low confidence match. While the surname 'Smith' matches, this is an extremely common name. Customer is a 35-year-old US citizen; watchlist entry is a 56-year-old UK citizen. DOB differs by 20 years. Nationality does not match. No aliases overlap. Online search reveals no connection between customer and any sanctioned activity. This is a clear name collision false positive.",
-    matching_signals: ["surname_match_only"],
-    conflicting_signals: ["dob_20yr_discrepancy", "nationality_mismatch", "no_alias_overlap", "age_mismatch", "no_public_connection"],
+      "Step 1 — Customer profile: John Smith from the United States (born 1990) has no notable online presence connecting him to any sanctioned activity, proliferation financing, or international crime. The name is one of the most common names in the English-speaking world. Step 2 — Sanctions entity profile: The UN-listed 'John Michael Smith' was designated in August 2019 by the UN Security Council for involvement in proliferation financing. He is a UK citizen born in 1970, based in London. Step 3 — Cross-comparison: Surname matches but given names differ (John vs. John Michael). Customer is a 35-year-old US citizen; watchlist entry is a 56-year-old UK national. DOB differs by 20 years. Nationality does not match. No aliases overlap. Step 4 — Assessment: This is a clear name-collision false positive. 'John Smith' is among the most common name combinations in English-speaking countries. The demographic data (age, nationality, DOB) all point to different individuals. Auto-clearing.",
+    matching_signals: ["Surname match ('Smith')", "First name partial match ('John')"],
+    conflicting_signals: [
+      "DOB 20-year discrepancy (1990 vs 1970)",
+      "Nationality mismatch (US vs UK)",
+      "No alias overlap",
+      "No public corroboration of any connection",
+      "Extremely common name — high false-positive probability",
+    ],
+    customer_background:
+      "No notable online presence found for John Smith (US, born 1990) beyond generic social profiles. No connection to proliferation financing, international sanctions, or any monitored activity. 'John Smith' is one of the most common English-language name combinations.",
+    sanctions_background:
+      "UN Security Council listed John Michael Smith in August 2019 for involvement in proliferation financing activities. He is a UK citizen born in London in 1970, last known address in London, UK.",
     sources: [
-      { label: "UN Security Council Consolidated List", url: "https://www.un.org/securitycouncil/sanctions/list" },
+      {
+        label: "UN Security Council Consolidated List",
+        url: "https://www.un.org/securitycouncil/sanctions/list",
+      },
     ],
     processed_at: "2026-03-27T08:10:00Z",
   },
@@ -315,14 +373,31 @@ export const MOCK_LAYER2_RESULTS: Layer2Result[] = [
     customer_id: "AAAAAAAADLKAAAAA",
     entity_id: "EU-11111",
     ai_confidence: 42,
+    // layer1_norm=(75/120*100)=62.5 → combined=(62.5*0.3)+(42*0.7)=18.75+29.4=48
+    combined_score: 48,
     routing: "HUMAN_REVIEW",
     reasoning:
-      "Moderate confidence. Customer 'Maria Santos Rodriguez' partially matches EU-listed 'Maria Santos'. Nationality matches (Mexican). DOB differs by approximately 2 years. The alias 'Maria S. Rodriguez' on the watchlist is close to the customer's full name. However, 'Maria Santos' is a relatively common Hispanic name. Online search found limited information linking either individual to the specific drug trafficking allegations. Further investigation warranted.",
-    matching_signals: ["name_partial_match", "nationality_match", "alias_similarity"],
-    conflicting_signals: ["dob_2yr_discrepancy", "common_name", "limited_corroboration"],
+      "Step 1 — Customer profile: Online research for Maria Santos Rodriguez (Mexico, born 1985) returns limited results. No direct connection found to drug trafficking networks or EU-listed activity. Step 2 — Sanctions entity profile: The EU-listed 'Maria Santos' was designated in March 2024 for involvement in drug trafficking networks operating across Central America. DEA reporting from 2024 references a 'Maria Santos' in this context, though details are limited due to the recent designation. Step 3 — Cross-comparison: Customer 'Maria Santos Rodriguez' partially matches EU-listed 'Maria Santos'. The alias 'Maria S. Rodriguez' on the watchlist is notably close to the customer's full name. Nationality matches (Mexico). DOB differs by approximately 2 years (customer: 1985-09-03 vs. sanctioned: 1983-12-18). Step 4 — Assessment: Moderate confidence. 'Maria Santos' is a common Hispanic name, reducing the weight of the name match. The DOB difference introduces uncertainty. The alias similarity to the customer's full name is notable but not conclusive. Human review required to verify identity.",
+    matching_signals: [
+      "Name partial match ('Maria Santos')",
+      "Nationality match (Mexico)",
+      "Alias 'Maria S. Rodriguez' closely matches customer full name",
+    ],
+    conflicting_signals: [
+      "DOB 2-year discrepancy (1985 vs 1983)",
+      "'Maria Santos' is a common Hispanic name",
+      "Limited public corroboration linking customer to drug trafficking",
+    ],
+    customer_background:
+      "Online research for Maria Santos Rodriguez (Mexico, born 1985) returns limited results with no direct link to drug trafficking or sanctioned activity. The name is common in Mexico and Latin America.",
+    sanctions_background:
+      "EU designated 'Maria Santos' in March 2024 for involvement in drug trafficking networks across Central America. DEA reports from 2024 reference this individual in connection with cartel logistics operations. Born 1983-12-18 in Guadalajara, Mexico.",
     sources: [
       { label: "EU Sanctions List — Council Regulation", url: "https://ec.europa.eu/sanctions" },
-      { label: "DEA Report — Central American drug networks", url: "https://dea.gov/reports/central-america-2024" },
+      {
+        label: "DEA Report — Central American drug networks",
+        url: "https://dea.gov/reports/central-america-2024",
+      },
     ],
     processed_at: "2026-03-27T08:10:00Z",
   },
@@ -332,14 +407,34 @@ export const MOCK_LAYER2_RESULTS: Layer2Result[] = [
     customer_id: "AAAAAAAAEKKAAAAA",
     entity_id: "OFAC-99999",
     ai_confidence: 72,
+    // layer1_norm=(120/120*100)=100 → combined=(100*0.3)+(72*0.7)=30+50.4=80
+    combined_score: 80,
     routing: "HUMAN_REVIEW",
     reasoning:
-      "High-moderate confidence. Customer 'Chen Wei' matches sanctioned 'Chen Wei Lin' — the customer name appears to be a substring. Exact DOB match. Nationality matches (Chinese). The alias 'Chen Wei' on the sanctions list exactly matches the customer's full name. However, 'Chen Wei' is an extremely common Chinese name. OFAC designation is for technology transfer activities. Customer's occupation and business dealings should be verified. One news article from South China Morning Post references the OFAC designation.",
-    matching_signals: ["name_substring_match", "dob_exact", "nationality_match", "alias_exact_match"],
-    conflicting_signals: ["extremely_common_name", "occupation_unverified"],
+      "Step 1 — Customer profile: Online research for Chen Wei (China, born 1972) yields limited results. 'Chen Wei' is one of the most common Chinese names. No direct link to technology transfer, weapons programs, or OFAC-designated activity found in publicly available sources. Step 2 — Sanctions entity profile: OFAC designated 'Chen Wei Lin' in September 2024 for facilitating technology transfer to entities supporting advanced weapons programs. South China Morning Post and Nikkei Asia reported on the designation. The entity operates out of Shenzhen. Step 3 — Cross-comparison: Customer name 'Chen Wei' is an exact match for the alias 'Chen Wei' listed on the sanctions record. The primary designation name is 'Chen Wei Lin' — the customer name appears to be a subset. Exact DOB match (1972-01-28). Nationality matches (China). The alias exact match combined with the exact DOB match is highly significant. However, 'Chen Wei' is an extremely common Chinese name (estimated 300,000+ individuals in China). Step 4 — Assessment: High-moderate confidence. The exact DOB and alias match are strong signals, but the name commonality is a significant mitigating factor. Layer 1 composite score is very high (120). Human review should verify occupation and business dealings against the technology sector red flags in the OFAC designation.",
+    matching_signals: [
+      "Alias 'Chen Wei' exact match",
+      "DOB exact match (1972-01-28)",
+      "Nationality match (China)",
+      "Layer 1 composite score very high (120/120)",
+    ],
+    conflicting_signals: [
+      "'Chen Wei' is an extremely common Chinese name (~300k+ individuals)",
+      "Customer occupation/sector not yet verified against technology transfer risk",
+    ],
+    customer_background:
+      "Online research for Chen Wei (China, born 1972) yields limited distinguishing results due to the name's extreme commonality in China. No direct evidence found linking this specific individual to technology transfer or weapons programs.",
+    sanctions_background:
+      "OFAC designated Chen Wei Lin (alias: Chen Wei) in September 2024 for facilitating technology transfer to entities involved in advanced weapons programs. The entity is based in Shenzhen and operates in the technology sector. SCMP and Nikkei Asia reported on the designation.",
     sources: [
-      { label: "OFAC SDN Designation — Sep 2024", url: "https://ofac.treasury.gov/recent-actions/20240915" },
-      { label: "SCMP — US sanctions Chinese tech facilitators", url: "https://scmp.com/tech/us-sanctions-china-2024" },
+      {
+        label: "OFAC SDN Designation — Sep 2024",
+        url: "https://ofac.treasury.gov/recent-actions/20240915",
+      },
+      {
+        label: "SCMP — US sanctions Chinese tech facilitators",
+        url: "https://scmp.com/tech/us-sanctions-china-2024",
+      },
     ],
     processed_at: "2026-03-27T08:10:00Z",
   },
