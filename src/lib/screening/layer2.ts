@@ -21,6 +21,17 @@ export interface Layer2Input {
   flag: Layer1Flag;
 }
 
+// ── Debug logger ────────────────────────────────────────────────────
+
+function log(step: string, data?: unknown) {
+  const ts = new Date().toISOString();
+  if (data !== undefined) {
+    console.log(`[Layer2] ${ts} | ${step}`, data);
+  } else {
+    console.log(`[Layer2] ${ts} | ${step}`);
+  }
+}
+
 // ── System prompt ───────────────────────────────────────────────────
 
 const SYSTEM_PROMPT = `You are a senior sanctions compliance analyst AI. You have been given:
@@ -141,14 +152,28 @@ interface AIAnalysis {
   sources: { label: string; url: string }[];
 }
 
-function parseAnalysis(text: string): AIAnalysis {
+function parseAnalysis(text: string, caseLabel: string): AIAnalysis {
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (jsonMatch) {
     try {
-      return JSON.parse(jsonMatch[0]) as AIAnalysis;
-    } catch {
-      // fall through to default
+      const parsed = JSON.parse(jsonMatch[0]) as AIAnalysis;
+      log(`${caseLabel} | parse OK`, {
+        ai_confidence: parsed.ai_confidence,
+        matching: parsed.matching_signals?.length ?? 0,
+        conflicting: parsed.conflicting_signals?.length ?? 0,
+        sources: parsed.sources?.length ?? 0,
+      });
+      return parsed;
+    } catch (err) {
+      log(`${caseLabel} | parse FAILED — JSON.parse error`, {
+        error: String(err),
+        raw: text.slice(0, 200),
+      });
     }
+  } else {
+    log(`${caseLabel} | parse FAILED — no JSON block found in response`, {
+      raw: text.slice(0, 200),
+    });
   }
   return {
     ai_confidence: 50,
@@ -166,35 +191,72 @@ function parseAnalysis(text: string): AIAnalysis {
 export async function processCase(input: Layer2Input): Promise<Layer2Result> {
   const { customer, sanctions, flag } = input;
   const cfg = SCREENING_CONFIG.layer2;
+  const caseLabel = `case ${flag.flag_id} [${customer.full_name} vs ${sanctions.entity_name}]`;
+
+  log(`${caseLabel} | START`);
 
   // ── Step 1: Dual parallel Brave searches ──────────────────────────
-  // Search A: Who is this customer? What does the public record say?
   const customerQuery = `"${customer.full_name}" ${customer.nationality} ${customer.dob ? customer.dob.split("-")[0] : ""} background`;
-  // Search B: Who is the sanctioned entity and why were they designated?
   const sanctionsQuery = `"${sanctions.entity_name}" ${sanctions.authority} ${sanctions.list_name} ${sanctions.nationality_country} sanctions designation`;
 
+  log(`${caseLabel} | Brave search START`, {
+    customerQuery,
+    sanctionsQuery,
+    maxResults: cfg.searchMaxResults,
+  });
+
+  const searchStart = Date.now();
   const [customerSearchResults, sanctionsSearchResults] = await Promise.all([
     braveSearch(customerQuery, cfg.searchMaxResults),
     braveSearch(sanctionsQuery, cfg.searchMaxResults),
   ]);
+  const searchMs = Date.now() - searchStart;
+
+  log(`${caseLabel} | Brave search DONE (${searchMs}ms)`, {
+    customerResults: customerSearchResults.length,
+    sanctionsResults: sanctionsSearchResults.length,
+    customerUrls: customerSearchResults.map((r) => r.url),
+    sanctionsUrls: sanctionsSearchResults.map((r) => r.url),
+  });
 
   // ── Step 2: Build the combined AI prompt ──────────────────────────
-  // cortexCompleteWithSearch is used here for the LLM call;
-  // search results are injected manually (we already ran them above).
-  // We pass no searchQuery so it does not run a third search.
   const userPrompt = buildUserPrompt(input, customerSearchResults, sanctionsSearchResults);
+  const promptChars = SYSTEM_PROMPT.length + userPrompt.length;
 
-  const { text } = await cortexCompleteWithSearch({
+  log(`${caseLabel} | Cortex COMPLETE START`, {
     model: cfg.model,
-    systemPrompt: SYSTEM_PROMPT,
-    userPrompt,
     temperature: cfg.temperature,
     maxTokens: cfg.maxTokens,
-    // No additional search — we've already injected results above
+    systemPromptChars: SYSTEM_PROMPT.length,
+    userPromptChars: userPrompt.length,
+    totalChars: promptChars,
+  });
+
+  const cortexStart = Date.now();
+  let text: string;
+  try {
+    const result = await cortexCompleteWithSearch({
+      model: cfg.model,
+      systemPrompt: SYSTEM_PROMPT,
+      userPrompt,
+      temperature: cfg.temperature,
+      maxTokens: cfg.maxTokens,
+    });
+    text = result.text;
+  } catch (err) {
+    const cortexMs = Date.now() - cortexStart;
+    log(`${caseLabel} | Cortex COMPLETE ERROR (${cortexMs}ms)`, { error: String(err) });
+    throw err;
+  }
+  const cortexMs = Date.now() - cortexStart;
+
+  log(`${caseLabel} | Cortex COMPLETE DONE (${cortexMs}ms)`, {
+    responseChars: text.length,
+    responsePreview: text.slice(0, 150),
   });
 
   // ── Step 3: Parse AI response ─────────────────────────────────────
-  const analysis = parseAnalysis(text);
+  const analysis = parseAnalysis(text, caseLabel);
 
   // Merge any sources the AI cited with the search results we ran
   const allUrls = new Set(analysis.sources.map((s) => s.url));
@@ -206,13 +268,16 @@ export async function processCase(input: Layer2Input): Promise<Layer2Result> {
   }
 
   // ── Step 4: Combined scoring ──────────────────────────────────────
-  // Blends the Layer 1 composite score (normalised to 0–100) with the
-  // AI confidence using weights defined in SCREENING_CONFIG.scoring.
   const combined_score = calculateCombinedScore(flag.composite_score, analysis.ai_confidence);
-
-  // ── Step 5: Routing decision ──────────────────────────────────────
-  // Routing is based on the COMBINED score, not just ai_confidence alone.
   const routing = routeByConfidence(combined_score);
+
+  log(`${caseLabel} | COMPLETE`, {
+    layer1_composite: flag.composite_score,
+    ai_confidence: analysis.ai_confidence,
+    combined_score,
+    routing,
+    totalMs: Date.now() - searchStart,
+  });
 
   return {
     result_id: `L2-${flag.flag_id}`,
@@ -236,13 +301,53 @@ export async function processCase(input: Layer2Input): Promise<Layer2Result> {
 
 export async function processBatch(inputs: Layer2Input[]): Promise<Layer2Result[]> {
   const { concurrency } = SCREENING_CONFIG.layer2;
+  const total = inputs.length;
   const results: Layer2Result[] = [];
 
-  for (let i = 0; i < inputs.length; i += concurrency) {
+  log(`processBatch START`, { total, concurrency });
+
+  for (let i = 0; i < total; i += concurrency) {
     const batch = inputs.slice(i, i + concurrency);
-    const batchResults = await Promise.all(batch.map(processCase));
-    results.push(...batchResults);
+    const batchNum = Math.floor(i / concurrency) + 1;
+    const totalBatches = Math.ceil(total / concurrency);
+
+    log(`processBatch batch ${batchNum}/${totalBatches} START`, {
+      cases: batch.map((b) => b.flag.flag_id),
+    });
+
+    const batchStart = Date.now();
+    const batchResults = await Promise.allSettled(batch.map(processCase));
+    const batchMs = Date.now() - batchStart;
+
+    let ok = 0;
+    let failed = 0;
+    for (const r of batchResults) {
+      if (r.status === "fulfilled") {
+        results.push(r.value);
+        ok++;
+      } else {
+        failed++;
+        log(`processBatch batch ${batchNum}/${totalBatches} | case FAILED`, {
+          reason: r.reason instanceof Error ? r.reason.message : String(r.reason),
+        });
+      }
+    }
+
+    log(`processBatch batch ${batchNum}/${totalBatches} DONE (${batchMs}ms)`, {
+      ok,
+      failed,
+      runningTotal: results.length,
+    });
   }
+
+  const summary = {
+    total: results.length,
+    auto_restrict: results.filter((r) => r.routing === "AUTO_RESTRICT").length,
+    auto_clear: results.filter((r) => r.routing === "AUTO_CLEAR").length,
+    human_review: results.filter((r) => r.routing === "HUMAN_REVIEW").length,
+  };
+
+  log(`processBatch DONE`, summary);
 
   return results;
 }
