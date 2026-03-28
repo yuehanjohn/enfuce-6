@@ -3,6 +3,9 @@
 //
 // When SNOWFLAKE_ACCOUNT + SNOWFLAKE_API_TOKEN are set, all queries
 // go to the real Snowflake SQL API. Otherwise, falls back to mock data.
+// Supports key-pair JWT auto-generation to avoid manual token rotation.
+
+import { createSign } from "node:crypto";
 
 interface SnowflakeConfig {
   account: string;
@@ -10,6 +13,9 @@ interface SnowflakeConfig {
   database: string;
   schema: string;
   token: string;
+  user?: string;
+  privateKey?: string;
+  publicKeyFingerprint?: string;
 }
 
 function getConfig(): SnowflakeConfig {
@@ -19,13 +25,89 @@ function getConfig(): SnowflakeConfig {
     database: process.env.SNOWFLAKE_DATABASE ?? "ENFUSE_SCREENING",
     schema: process.env.SNOWFLAKE_SCHEMA ?? "PUBLIC",
     token: process.env.SNOWFLAKE_API_TOKEN ?? "",
+    user: process.env.SNOWFLAKE_USER ?? "",
+    privateKey: (process.env.SNOWFLAKE_PRIVATE_KEY ?? "").replace(/\\n/g, "\n"),
+    publicKeyFingerprint: process.env.SNOWFLAKE_PUBLIC_KEY_FINGERPRINT ?? "",
   };
+}
+
+let cachedGeneratedToken = "";
+let cachedGeneratedTokenExpMs = 0;
+
+function base64UrlEncode(value: string | Buffer): string {
+  const buf = Buffer.isBuffer(value) ? value : Buffer.from(value, "utf8");
+  return buf.toString("base64").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+}
+
+function canGenerateKeyPairJwt(config: SnowflakeConfig): boolean {
+  return !!(config.account && config.user && config.privateKey && config.publicKeyFingerprint);
+}
+
+function generateKeyPairJwt(config: SnowflakeConfig): string {
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const expSeconds = nowSeconds + 59 * 60; // 59 minute lifetime
+
+  const account = config.account.toUpperCase();
+  const user = config.user!.toUpperCase();
+
+  const header = { alg: "RS256", typ: "JWT" };
+  const payload = {
+    iss: `${account}.${user}.${config.publicKeyFingerprint}`,
+    sub: `${account}.${user}`,
+    iat: nowSeconds,
+    exp: expSeconds,
+  };
+
+  const encodedHeader = base64UrlEncode(JSON.stringify(header));
+  const encodedPayload = base64UrlEncode(JSON.stringify(payload));
+  const signingInput = `${encodedHeader}.${encodedPayload}`;
+
+  const signer = createSign("RSA-SHA256");
+  signer.update(signingInput);
+  signer.end();
+
+  const signature = signer.sign(config.privateKey!);
+  const token = `${signingInput}.${base64UrlEncode(signature)}`;
+
+  cachedGeneratedToken = token;
+  cachedGeneratedTokenExpMs = expSeconds * 1000;
+  return token;
+}
+
+function getAuthToken(config: SnowflakeConfig): string {
+  // Prefer explicit static token if provided
+  if (config.token) {
+    return config.token;
+  }
+
+  // Fall back to auto-generated key-pair JWT
+  if (!canGenerateKeyPairJwt(config)) {
+    return "";
+  }
+
+  // Reuse cached token until 60s before expiry
+  if (cachedGeneratedToken && Date.now() < cachedGeneratedTokenExpMs - 60_000) {
+    return cachedGeneratedToken;
+  }
+
+  return generateKeyPairJwt(config);
+}
+
+function isKeyPairJwt(config: SnowflakeConfig): boolean {
+  // If using a static token, it's only a KEYPAIR_JWT if we didn't generate it
+  if (config.token && !canGenerateKeyPairJwt(config)) {
+    // Static PAT token - not a KEYPAIR_JWT
+    return false;
+  }
+  // If we're generating JWTs, it's a KEYPAIR_JWT
+  return canGenerateKeyPairJwt(config);
 }
 
 /** Whether a real Snowflake connection is configured */
 export function isSnowflakeConfigured(): boolean {
   const config = getConfig();
-  return !!(config.account && config.token);
+  const authToken = getAuthToken(config);
+  return !!(config.account && authToken);
 }
 
 export interface SnowflakeResult<T = Record<string, unknown>> {
@@ -36,21 +118,25 @@ export interface SnowflakeResult<T = Record<string, unknown>> {
 // Snowflake SQL API can return async handles for long queries.
 // We poll until the statement completes.
 const POLL_INTERVAL_MS = 500;
-const MAX_POLL_ATTEMPTS = 120; // 60 seconds max
+const MAX_POLL_ATTEMPTS = 600; // 300 seconds (5 min) max
 
 async function pollForResult(
   statementHandle: string,
   config: SnowflakeConfig,
+  authToken: string
 ): Promise<Record<string, unknown>> {
   const url = `https://${config.account}.snowflakecomputing.com/api/v2/statements/${statementHandle}`;
 
   for (let i = 0; i < MAX_POLL_ATTEMPTS; i++) {
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${authToken}`,
+    };
+    if (isKeyPairJwt(config)) {
+      headers["X-Snowflake-Authorization-Token-Type"] = "KEYPAIR_JWT";
+    }
     const response = await fetch(url, {
       method: "GET",
-      headers: {
-        Authorization: `Bearer ${config.token}`,
-        "X-Snowflake-Authorization-Token-Type": "KEYPAIR_JWT",
-      },
+      headers,
     });
 
     if (!response.ok) {
@@ -79,11 +165,12 @@ async function pollForResult(
  */
 export async function executeQuery<T = Record<string, unknown>>(
   sql: string,
-  bindings?: Record<string, string | number | boolean | null>,
+  bindings?: Record<string, string | number | boolean | null>
 ): Promise<SnowflakeResult<T>> {
   const config = getConfig();
+  const authToken = getAuthToken(config);
 
-  if (!isSnowflakeConfigured()) {
+  if (!(config.account && authToken)) {
     return { rows: [], rowCount: 0 };
   }
 
@@ -91,7 +178,7 @@ export async function executeQuery<T = Record<string, unknown>>(
 
   const body: Record<string, unknown> = {
     statement: sql,
-    timeout: 60,
+    timeout: 300,
     warehouse: config.warehouse,
     database: config.database,
     schema: config.schema,
@@ -103,17 +190,20 @@ export async function executeQuery<T = Record<string, unknown>>(
       Object.entries(bindings).map(([key, value]) => [
         key,
         { type: typeof value === "number" ? "FIXED" : "TEXT", value: String(value ?? "") },
-      ]),
+      ])
     );
   }
 
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${authToken}`,
+  };
+  if (isKeyPairJwt(config)) {
+    headers["X-Snowflake-Authorization-Token-Type"] = "KEYPAIR_JWT";
+  }
   const response = await fetch(url, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${config.token}`,
-      "X-Snowflake-Authorization-Token-Type": "KEYPAIR_JWT",
-    },
+    headers,
     body: JSON.stringify(body),
   });
 
@@ -124,14 +214,14 @@ export async function executeQuery<T = Record<string, unknown>>(
 
   let result = await response.json();
 
-  // If async execution, poll for completion
+  // If async execution, poll for completion using same token to avoid drift
   if (result.code === "090001" && result.statementHandle) {
-    result = await pollForResult(result.statementHandle, config);
+    result = await pollForResult(result.statementHandle, config, authToken);
   }
 
   // Map column names to row values
-  const columns: string[] = (result.resultSetMetaData?.rowType ?? []).map(
-    (col: { name: string }) => col.name.toLowerCase(),
+  const columns: string[] = (result.resultSetMetaData?.rowType ?? []).map((col: { name: string }) =>
+    col.name.toLowerCase()
   );
   const data: string[][] = result.data ?? [];
 
