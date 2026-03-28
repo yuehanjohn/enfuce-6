@@ -10,6 +10,11 @@ const envSchema = z.object({
   SNOWFLAKE_WAREHOUSE: z.string().default("COMPUTE_WH"),
   SNOWFLAKE_DATABASE: z.string().default("SCREENING_DB"),
   SNOWFLAKE_SCHEMA: z.string().default("PUBLIC"),
+  // Key-pair JWT auto-generation (recommended)
+  SNOWFLAKE_USER: z.string().optional(),
+  SNOWFLAKE_PRIVATE_KEY: z.string().optional(),
+  SNOWFLAKE_PUBLIC_KEY_FINGERPRINT: z.string().optional(),
+  // Static pre-generated token (alternative)
   SNOWFLAKE_API_TOKEN: z.string().optional(),
 });
 
