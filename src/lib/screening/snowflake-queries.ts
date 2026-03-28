@@ -231,11 +231,12 @@ export async function runLayer1Screening(): Promise<{ flagCount: number; custome
 
 export async function fetchLayer2Results(): Promise<Layer2Result[]> {
   const result = await executeQuery<Record<string, unknown>>(`
-    SELECT result_id, flag_id, customer_id, entity_id, ai_confidence, routing,
+    SELECT result_id, flag_id, customer_id, entity_id, ai_confidence, combined_score, routing,
            reasoning, matching_signals, conflicting_signals, sources,
+           customer_background, sanctions_background,
            TO_CHAR(processed_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS processed_at
     FROM SCREENING.LAYER2_RESULTS
-    ORDER BY ai_confidence DESC
+    ORDER BY combined_score DESC
   `);
   return result.rows.map((r) => ({
     result_id: String(r.result_id),
@@ -243,19 +244,23 @@ export async function fetchLayer2Results(): Promise<Layer2Result[]> {
     customer_id: String(r.customer_id),
     entity_id: String(r.entity_id),
     ai_confidence: Number(r.ai_confidence),
+    combined_score: Number(r.combined_score ?? r.ai_confidence),
     routing: String(r.routing) as Layer2Result["routing"],
     reasoning: String(r.reasoning ?? ""),
     matching_signals: (r.matching_signals as string[]) ?? [],
     conflicting_signals: (r.conflicting_signals as string[]) ?? [],
     sources: (r.sources as Layer2Result["sources"]) ?? [],
+    customer_background: String(r.customer_background ?? ""),
+    sanctions_background: String(r.sanctions_background ?? ""),
     processed_at: String(r.processed_at ?? ""),
   }));
 }
 
 export async function fetchLayer2ByResultId(id: string): Promise<Layer2Result | null> {
   const result = await executeQuery<Record<string, unknown>>(`
-    SELECT result_id, flag_id, customer_id, entity_id, ai_confidence, routing,
+    SELECT result_id, flag_id, customer_id, entity_id, ai_confidence, combined_score, routing,
            reasoning, matching_signals, conflicting_signals, sources,
+           customer_background, sanctions_background,
            TO_CHAR(processed_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS processed_at
     FROM SCREENING.LAYER2_RESULTS
     WHERE result_id = '${id.replace(/'/g, "''")}'
@@ -268,13 +273,147 @@ export async function fetchLayer2ByResultId(id: string): Promise<Layer2Result | 
     customer_id: String(r.customer_id),
     entity_id: String(r.entity_id),
     ai_confidence: Number(r.ai_confidence),
+    combined_score: Number(r.combined_score ?? r.ai_confidence),
     routing: String(r.routing) as Layer2Result["routing"],
     reasoning: String(r.reasoning ?? ""),
     matching_signals: (r.matching_signals as string[]) ?? [],
     conflicting_signals: (r.conflicting_signals as string[]) ?? [],
     sources: (r.sources as Layer2Result["sources"]) ?? [],
+    customer_background: String(r.customer_background ?? ""),
+    sanctions_background: String(r.sanctions_background ?? ""),
     processed_at: String(r.processed_at ?? ""),
   };
+}
+
+// ── Layer 2 input builder ────────────────────────────────────────────
+
+import type { Layer2Input } from "./layer2";
+
+/**
+ * For each Layer 1 flag, fetch the associated customer and sanctions entry.
+ * Returns an array ready to pass to processBatch().
+ */
+export async function buildLayer2Inputs(flags: Layer1Flag[]): Promise<Layer2Input[]> {
+  const inputs: Layer2Input[] = [];
+  // Fetch in parallel batches of 10 to avoid overwhelming the SQL API
+  const BATCH = 10;
+  for (let i = 0; i < flags.length; i += BATCH) {
+    const slice = flags.slice(i, i + BATCH);
+    const resolved = await Promise.all(
+      slice.map(async (flag) => {
+        const [customer, sanctions] = await Promise.all([
+          fetchCustomerById(flag.customer_id),
+          fetchSanctionsEntryById(flag.entity_id),
+        ]);
+        if (!customer || !sanctions) return null;
+        return { customer, sanctions, flag } satisfies Layer2Input;
+      })
+    );
+    for (const r of resolved) {
+      if (r) inputs.push(r);
+    }
+  }
+  return inputs;
+}
+
+// ── Layer 2 result saver ─────────────────────────────────────────────
+
+/**
+ * Persist Layer 2 results to Snowflake:
+ * - Clears the previous run's results
+ * - Inserts every result into LAYER2_RESULTS
+ * - For AUTO_RESTRICT: inserts into DECISIONS.RESTRICTIONS + AUDIT.LOG
+ * - For AUTO_CLEAR: inserts into DECISIONS.CLEARANCES + AUDIT.LOG
+ * - For HUMAN_REVIEW: inserts into QUEUE.PENDING_REVIEW + AUDIT.LOG
+ */
+export async function saveLayer2Results(results: Layer2Result[]): Promise<void> {
+  const esc = (s: string) => String(s ?? "").replace(/'/g, "''");
+
+  // Clean previous run
+  await executeStatement(`TRUNCATE TABLE SCREENING.LAYER2_RESULTS`);
+  await executeStatement(`DELETE FROM QUEUE.PENDING_REVIEW WHERE status = 'PENDING'`);
+
+  for (const r of results) {
+    const matchingJson = JSON.stringify(r.matching_signals ?? []).replace(/'/g, "''");
+    const conflictingJson = JSON.stringify(r.conflicting_signals ?? []).replace(/'/g, "''");
+    const sourcesJson = JSON.stringify(r.sources ?? []).replace(/'/g, "''");
+
+    // Insert result
+    await executeStatement(`
+      INSERT INTO SCREENING.LAYER2_RESULTS
+        (result_id, flag_id, customer_id, entity_id, ai_confidence, combined_score,
+         routing, reasoning, matching_signals, conflicting_signals, sources,
+         customer_background, sanctions_background)
+      VALUES (
+        '${esc(r.result_id)}', '${esc(r.flag_id)}', '${esc(r.customer_id)}', '${esc(r.entity_id)}',
+        ${r.ai_confidence}, ${r.combined_score},
+        '${esc(r.routing)}', '${esc(r.reasoning)}',
+        PARSE_JSON('${matchingJson}'), PARSE_JSON('${conflictingJson}'), PARSE_JSON('${sourcesJson}'),
+        '${esc(r.customer_background)}', '${esc(r.sanctions_background)}'
+      )
+    `);
+
+    const auditPayload = JSON.stringify({
+      result_id: r.result_id,
+      ai_confidence: r.ai_confidence,
+      combined_score: r.combined_score,
+      routing: r.routing,
+    }).replace(/'/g, "''");
+
+    if (r.routing === "AUTO_RESTRICT") {
+      const decisionId = `DEC-AUTO-R-${r.customer_id}-${Date.now()}`;
+      await executeStatement(`
+        INSERT INTO DECISIONS.RESTRICTIONS
+          (decision_id, customer_id, result_id, trigger_type, analyst_id, reason_category, analyst_note)
+        VALUES (
+          '${decisionId}', '${esc(r.customer_id)}', '${esc(r.result_id)}',
+          'AUTO', NULL, 'Combined score >= auto-restrict threshold', 'Auto-restricted by Layer 2 AI screening'
+        )
+      `);
+      await executeStatement(`
+        INSERT INTO AUDIT.LOG (log_id, customer_id, layer, event_type, payload)
+        VALUES (
+          'AUDIT-L2-AR-${Date.now()}-${esc(r.customer_id)}',
+          '${esc(r.customer_id)}', 2, 'AUTO_RESTRICTED', PARSE_JSON('${auditPayload}')
+        )
+      `);
+    } else if (r.routing === "AUTO_CLEAR") {
+      const decisionId = `DEC-AUTO-C-${r.customer_id}-${Date.now()}`;
+      await executeStatement(`
+        INSERT INTO DECISIONS.CLEARANCES
+          (decision_id, customer_id, result_id, trigger_type, analyst_id, reason_category, analyst_note)
+        VALUES (
+          '${decisionId}', '${esc(r.customer_id)}', '${esc(r.result_id)}',
+          'AUTO', NULL, 'Combined score <= auto-clear threshold', 'Auto-cleared by Layer 2 AI screening'
+        )
+      `);
+      await executeStatement(`
+        INSERT INTO AUDIT.LOG (log_id, customer_id, layer, event_type, payload)
+        VALUES (
+          'AUDIT-L2-AC-${Date.now()}-${esc(r.customer_id)}',
+          '${esc(r.customer_id)}', 2, 'AUTO_CLEARED', PARSE_JSON('${auditPayload}')
+        )
+      `);
+    } else {
+      // HUMAN_REVIEW → push to queue
+      const queueId = `Q-${r.customer_id}-${Date.now()}`;
+      await executeStatement(`
+        INSERT INTO QUEUE.PENDING_REVIEW
+          (queue_id, result_id, customer_id, entity_id, ai_confidence, status)
+        VALUES (
+          '${queueId}', '${esc(r.result_id)}', '${esc(r.customer_id)}',
+          '${esc(r.entity_id)}', ${r.ai_confidence}, 'PENDING'
+        )
+      `);
+      await executeStatement(`
+        INSERT INTO AUDIT.LOG (log_id, customer_id, layer, event_type, payload)
+        VALUES (
+          'AUDIT-L2-HR-${Date.now()}-${esc(r.customer_id)}',
+          '${esc(r.customer_id)}', 2, 'QUEUED_FOR_REVIEW', PARSE_JSON('${auditPayload}')
+        )
+      `);
+    }
+  }
 }
 
 export async function runLayer2Processing(): Promise<{
@@ -283,9 +422,8 @@ export async function runLayer2Processing(): Promise<{
   auto_clear: number;
   human_review: number;
 }> {
-  // Call the stored procedure
-  await executeStatement(`CALL SCREENING.PROCESS_LAYER2_BATCH()`);
-
+  // This function is now a thin summary query — the actual processing
+  // is orchestrated by the API route using processBatch() + saveLayer2Results().
   const result = await executeQuery<Record<string, string>>(`
     SELECT routing, COUNT(*) AS cnt FROM SCREENING.LAYER2_RESULTS GROUP BY routing
   `);
@@ -303,9 +441,7 @@ export async function runLayer2Processing(): Promise<{
 
 // ── Queue ───────────────────────────────────────────────────────────
 
-export async function fetchQueue(
-  limit = 25
-): Promise<
+export async function fetchQueue(limit = 25): Promise<
   (QueueItem & {
     customer_name: string;
     customer_nationality: string;

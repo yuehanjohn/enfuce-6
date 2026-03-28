@@ -159,9 +159,34 @@ async function pollForResult(
   throw new Error(`Snowflake query timed out after ${MAX_POLL_ATTEMPTS * POLL_INTERVAL_MS}ms`);
 }
 
+// Errors that indicate a transient connection failure worth retrying.
+// These come from Node.js undici when the TCP connection is dropped or
+// the connection pool is exhausted after sustained concurrent load.
+const RETRYABLE_CODES = new Set([
+  "ECONNRESET",
+  "ENOTFOUND",
+  "ECONNREFUSED",
+  "ETIMEDOUT",
+  "UND_ERR_SOCKET",
+]);
+
+function isRetryable(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const msg = err.message.toLowerCase();
+  if (msg === "fetch failed" || msg.includes("network") || msg.includes("socket")) return true;
+  const cause = (err as NodeJS.ErrnoException & { cause?: { code?: string } }).cause;
+  return !!(cause?.code && RETRYABLE_CODES.has(cause.code));
+}
+
+async function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 /**
  * Execute a SQL query against Snowflake SQL API.
  * Returns empty result set if Snowflake is not configured (mock mode).
+ * Retries up to MAX_RETRIES times on transient network failures with
+ * exponential backoff — prevents batch failures from exhausted connections.
  */
 export async function executeQuery<T = Record<string, unknown>>(
   sql: string,
@@ -201,50 +226,75 @@ export async function executeQuery<T = Record<string, unknown>>(
   if (isKeyPairJwt(config)) {
     headers["X-Snowflake-Authorization-Token-Type"] = "KEYPAIR_JWT";
   }
-  const response = await fetch(url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-  });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Snowflake query failed (${response.status}): ${errorText}`);
-  }
+  const MAX_RETRIES = 4;
+  const BASE_DELAY_MS = 1000; // 1s → 2s → 4s → 8s
 
-  let result = await response.json();
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      const delay = BASE_DELAY_MS * Math.pow(2, attempt - 1);
+      console.log(
+        `[Snowflake] retry ${attempt}/${MAX_RETRIES} after ${delay}ms (${(lastErr as Error)?.message})`
+      );
+      await sleep(delay);
+    }
 
-  // Poll only when Snowflake returned async status without result rows yet.
-  if (result.code === "090001" && result.statementHandle && !Array.isArray(result.data)) {
-    result = await pollForResult(result.statementHandle, config, authToken);
-  }
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      });
 
-  // Map column names to row values
-  const columns: string[] = (result.resultSetMetaData?.rowType ?? []).map((col: { name: string }) =>
-    col.name.toLowerCase()
-  );
-  const data: string[][] = result.data ?? [];
-
-  const rows = data.map((row: string[]) => {
-    const obj: Record<string, unknown> = {};
-    columns.forEach((col, i) => {
-      // Parse VARIANT/ARRAY columns as JSON
-      const colMeta = result.resultSetMetaData?.rowType?.[i];
-      const rawVal = row[i];
-      if (rawVal != null && colMeta && (colMeta.type === "variant" || colMeta.type === "array")) {
-        try {
-          obj[col] = JSON.parse(rawVal);
-        } catch {
-          obj[col] = rawVal;
-        }
-      } else {
-        obj[col] = rawVal;
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Snowflake query failed (${response.status}): ${errorText}`);
       }
-    });
-    return obj as T;
-  });
 
-  return { rows, rowCount: rows.length };
+      let result = await response.json();
+
+      // Poll only when Snowflake returned async status without result rows yet.
+      if (result.code === "090001" && result.statementHandle && !Array.isArray(result.data)) {
+        result = await pollForResult(result.statementHandle, config, authToken);
+      }
+
+      // Map column names to row values
+      const columns: string[] = (result.resultSetMetaData?.rowType ?? []).map(
+        (col: { name: string }) => col.name.toLowerCase()
+      );
+      const data: string[][] = result.data ?? [];
+
+      const rows = data.map((row: string[]) => {
+        const obj: Record<string, unknown> = {};
+        columns.forEach((col, i) => {
+          const colMeta = result.resultSetMetaData?.rowType?.[i];
+          const rawVal = row[i];
+          if (
+            rawVal != null &&
+            colMeta &&
+            (colMeta.type === "variant" || colMeta.type === "array")
+          ) {
+            try {
+              obj[col] = JSON.parse(rawVal);
+            } catch {
+              obj[col] = rawVal;
+            }
+          } else {
+            obj[col] = rawVal;
+          }
+        });
+        return obj as T;
+      });
+
+      return { rows, rowCount: rows.length };
+    } catch (err) {
+      lastErr = err;
+      if (!isRetryable(err) || attempt === MAX_RETRIES) throw err;
+    }
+  }
+
+  throw lastErr;
 }
 
 /** Execute a write statement (INSERT/UPDATE/DELETE). Returns affected row count. */

@@ -1,9 +1,17 @@
-// Confidence → Routing Decision
-import type { RoutingDecision } from "@/types/screening";
+// Confidence/combined-score → Routing Decision
+// Thresholds come from SCREENING_CONFIG so they're editable in one place.
 
-export function routeByConfidence(aiConfidence: number): RoutingDecision {
-  if (aiConfidence >= 90) return "AUTO_RESTRICT";
-  if (aiConfidence <= 10) return "AUTO_CLEAR";
+import type { RoutingDecision } from "@/types/screening";
+import { SCREENING_CONFIG } from "./config";
+
+/**
+ * Map a combined score (0–100) to a routing decision.
+ * Pass the combined_score (not raw ai_confidence) for production routing.
+ */
+export function routeByConfidence(score: number): RoutingDecision {
+  const { autoRestrictThreshold, autoClearThreshold } = SCREENING_CONFIG.routing;
+  if (score >= autoRestrictThreshold) return "AUTO_RESTRICT";
+  if (score <= autoClearThreshold) return "AUTO_CLEAR";
   return "HUMAN_REVIEW";
 }
 
@@ -33,6 +41,5 @@ export function getConfidenceColor(confidence: number): string {
   if (confidence >= 80) return "text-danger";
   if (confidence >= 60) return "text-warning";
   if (confidence >= 40) return "text-yellow-500";
-  if (confidence >= 20) return "text-success";
   return "text-success";
 }

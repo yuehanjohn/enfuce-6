@@ -6,50 +6,104 @@ import { executeQuery } from "./snowflake";
 import type { ReviewCase } from "@/types/screening";
 
 // ── Cortex Complete (LLM) ───────────────────────────────────────────
+//
+// IMPORTANT — why we use PARSE_JSON(?) with a bind parameter:
+//
+// Embedding prompts directly as SQL string literals breaks when the prompt
+// contains characters that are significant in SQL or in the Snowflake SQL
+// API JSON payload (e.g. single quotes, backslashes, HTML entities from
+// Brave search snippets, JavaScript code fragments, etc.).
+//
+// The safe pattern:
+//   1. JSON.stringify the messages array → a valid, fully-escaped JSON string
+//   2. Pass it as a bind parameter (key "1") → Snowflake receives it verbatim
+//   3. PARSE_JSON(?) converts it to a VARIANT that Cortex can consume
+//
+// This completely eliminates SQL injection and character-escaping bugs.
 
 interface CortexCompleteOptions {
   model?: string;
-  prompt: string;
+  /** If both systemPrompt and userPrompt are provided they are sent as separate
+   *  system/user messages. Otherwise `prompt` is sent as a single user message. */
+  systemPrompt?: string;
+  userPrompt?: string;
+  /** Legacy single-message API — used when there is no system/user separation */
+  prompt?: string;
   temperature?: number;
   maxTokens?: number;
 }
 
+function cortexLog(step: string, data?: unknown) {
+  const ts = new Date().toISOString();
+  if (data !== undefined) {
+    console.log(`[Cortex] ${ts} | ${step}`, data);
+  } else {
+    console.log(`[Cortex] ${ts} | ${step}`);
+  }
+}
+
 export async function cortexComplete({
   model = "claude-3-5-sonnet",
+  systemPrompt,
+  userPrompt,
   prompt,
   temperature = 0.3,
   maxTokens = 2000,
 }: CortexCompleteOptions): Promise<string> {
-  // Escape single quotes in prompt for SQL
-  const escapedPrompt = prompt.replace(/'/g, "''");
+  // Build the messages array
+  const messages: { role: string; content: string }[] = [];
+
+  if (systemPrompt && userPrompt) {
+    messages.push({ role: "system", content: systemPrompt });
+    messages.push({ role: "user", content: userPrompt });
+  } else {
+    messages.push({ role: "user", content: prompt ?? "" });
+  }
+
+  // JSON.stringify handles ALL special characters safely (newlines, quotes,
+  // backslashes, Unicode, etc.) — no manual SQL escaping needed.
+  const messagesJson = JSON.stringify(messages);
+
+  cortexLog(`COMPLETE call`, {
+    model,
+    temperature,
+    maxTokens,
+    messages: messages.map((m) => ({ role: m.role, chars: m.content.length })),
+    totalPayloadChars: messagesJson.length,
+  });
 
   const sql = `
     SELECT SNOWFLAKE.CORTEX.COMPLETE(
       '${model}',
-      [
-        {
-          'role': 'user',
-          'content': '${escapedPrompt}'
-        }
-      ],
-      {
-        'temperature': ${temperature},
-        'max_tokens': ${maxTokens}
-      }
-    ) AS response;
+      PARSE_JSON(?),
+      {'temperature': ${temperature}, 'max_tokens': ${maxTokens}}
+    ) AS response
   `;
 
-  const result = await executeQuery<{ response: string }>(sql);
+  const t0 = Date.now();
+  const result = await executeQuery<{ response: string }>(sql, { "1": messagesJson });
+  const ms = Date.now() - t0;
+
   if (result.rows.length === 0) {
+    cortexLog(`COMPLETE ERROR — no rows returned (${ms}ms)`, {
+      model,
+      payloadChars: messagesJson.length,
+    });
     throw new Error("Cortex COMPLETE returned no results");
   }
 
-  // Parse the response — Cortex returns JSON with choices
+  // Cortex returns JSON with a choices array
   const raw = result.rows[0].response;
+  cortexLog(`COMPLETE OK (${ms}ms)`, {
+    rawChars: String(raw).length,
+    rawPreview: String(raw).slice(0, 100),
+  });
+
   try {
     const parsed = JSON.parse(raw);
     return parsed.choices?.[0]?.messages ?? parsed.choices?.[0]?.message?.content ?? raw;
   } catch {
+    cortexLog(`COMPLETE response parse FAILED — returning raw`, { raw: String(raw).slice(0, 200) });
     return raw;
   }
 }
@@ -63,33 +117,73 @@ interface SearchResult {
 }
 
 export async function braveSearch(query: string, maxResults = 5): Promise<SearchResult[]> {
+  cortexLog(`braveSearch START`, { query, maxResults });
+
+  // CORTEX.SEARCH_PREVIEW does NOT accept bind parameters — using them causes
+  // Snowflake to wrap the integer literal in TO_CHAR() and reject it.
+  // Simple single-quote escaping is sufficient here; the query is AI-generated
+  // and the only problematic character in real names is the apostrophe.
   const escapedQuery = query.replace(/'/g, "''");
 
-  // Snowflake Cortex integrates Brave Search via CORTEX.SEARCH_PREVIEW
-  // or via the search integration function
   const sql = `
     SELECT PARSE_JSON(SNOWFLAKE.CORTEX.SEARCH_PREVIEW(
       '${escapedQuery}',
       ${maxResults}
-    )) AS results;
+    )) AS results
   `;
 
+  const t0 = Date.now();
   try {
     const result = await executeQuery<{ results: string }>(sql);
-    if (result.rows.length === 0) return [];
+    const ms = Date.now() - t0;
 
-    const parsed = JSON.parse(result.rows[0].results);
-    return (parsed.results ?? parsed ?? []).map((r: Record<string, string>) => ({
+    if (result.rows.length === 0) {
+      cortexLog(`braveSearch EMPTY (${ms}ms) — no rows`, { query });
+      return [];
+    }
+
+    const parsed = JSON.parse(result.rows[0].results as unknown as string);
+    const hits = (parsed.results ?? parsed ?? []).map((r: Record<string, string>) => ({
       title: r.title ?? "",
       url: r.url ?? "",
       snippet: r.snippet ?? r.description ?? "",
     }));
-  } catch {
+
+    cortexLog(`braveSearch OK (${ms}ms)`, {
+      query,
+      hits: hits.length,
+      urls: hits.map((h: SearchResult) => h.url),
+    });
+    return hits;
+  } catch (err) {
+    const ms = Date.now() - t0;
+    cortexLog(`braveSearch ERROR (${ms}ms)`, { query, error: String(err) });
     return [];
   }
 }
 
-// ── Cortex Complete with search context ─────────────────────────────
+// ── Multi-query Brave Search ─────────────────────────────────────────
+
+/**
+ * Run multiple Brave searches in parallel and return deduplicated results.
+ * Use this when you need separate research on two different subjects.
+ */
+export async function multiSearch(queries: string[], maxResultsEach = 5): Promise<SearchResult[]> {
+  const allResults = await Promise.all(queries.map((q) => braveSearch(q, maxResultsEach)));
+  const seen = new Set<string>();
+  const deduped: SearchResult[] = [];
+  for (const batch of allResults) {
+    for (const r of batch) {
+      if (!seen.has(r.url)) {
+        seen.add(r.url);
+        deduped.push(r);
+      }
+    }
+  }
+  return deduped;
+}
+
+// ── Cortex Complete with optional search context ─────────────────────
 
 export async function cortexCompleteWithSearch({
   model = "claude-3-5-sonnet",
@@ -106,21 +200,30 @@ export async function cortexCompleteWithSearch({
   temperature?: number;
   maxTokens?: number;
 }): Promise<{ text: string; searchResults: SearchResult[] }> {
-  // First do web search if query provided
+  // Run web search first if a query was provided
   let searchResults: SearchResult[] = [];
-  let searchContext = "";
+  let enrichedUserPrompt = userPrompt;
 
   if (searchQuery) {
     searchResults = await braveSearch(searchQuery);
     if (searchResults.length > 0) {
-      searchContext = "\n\n## Web Search Results\n" +
-        searchResults.map((r, i) => `${i + 1}. **${r.title}** (${r.url})\n   ${r.snippet}`).join("\n\n");
+      const searchContext =
+        "\n\n## Web Search Results\n" +
+        searchResults
+          .map((r, i) => `${i + 1}. **${r.title}** (${r.url})\n   ${r.snippet}`)
+          .join("\n\n");
+      enrichedUserPrompt = userPrompt + searchContext;
     }
   }
 
-  const fullPrompt = `${systemPrompt}\n\n${userPrompt}${searchContext}`;
+  const text = await cortexComplete({
+    model,
+    systemPrompt,
+    userPrompt: enrichedUserPrompt,
+    temperature,
+    maxTokens,
+  });
 
-  const text = await cortexComplete({ model, prompt: fullPrompt, temperature, maxTokens });
   return { text, searchResults };
 }
 
@@ -161,7 +264,8 @@ function buildChatSystemPrompt(reviewCase: ReviewCase): string {
 - Nationality Score: ${layer1.nationality_score}
 
 ### Layer 2 AI Analysis
-- Confidence: ${layer2.ai_confidence}%
+- Combined Score: ${layer2.combined_score}%
+- AI Confidence: ${layer2.ai_confidence}%
 - Routing: ${layer2.routing}
 - Reasoning: ${layer2.reasoning}
 - Matching Signals: ${layer2.matching_signals.join(", ")}
@@ -172,19 +276,29 @@ Help the analyst by answering their questions. Be concise and factual. Cite sour
 
 export async function getChatResponse(
   reviewCase: ReviewCase,
-  messages: ChatMessage[],
+  messages: ChatMessage[]
 ): Promise<string> {
   const systemPrompt = buildChatSystemPrompt(reviewCase);
 
-  // Build conversation history into a single prompt
+  // Build conversation history into a single user message
   const conversationHistory = messages
     .map((m) => `${m.role === "user" ? "Human" : "Assistant"}: ${m.content}`)
     .join("\n\n");
 
   // Determine if user is asking for a search
   const lastMessage = messages[messages.length - 1];
-  const searchKeywords = ["find", "search", "news", "recent", "court", "record", "article", "report"];
-  const needsSearch = lastMessage.role === "user" &&
+  const searchKeywords = [
+    "find",
+    "search",
+    "news",
+    "recent",
+    "court",
+    "record",
+    "article",
+    "report",
+  ];
+  const needsSearch =
+    lastMessage.role === "user" &&
     searchKeywords.some((kw) => lastMessage.content.toLowerCase().includes(kw));
 
   const searchQuery = needsSearch
@@ -199,9 +313,7 @@ export async function getChatResponse(
 
   // Append search results as citations if found
   if (searchResults.length > 0) {
-    const citations = searchResults
-      .map((r) => `- [${r.title}](${r.url})`)
-      .join("\n");
+    const citations = searchResults.map((r) => `- [${r.title}](${r.url})`).join("\n");
     return `${text}\n\n**Sources:**\n${citations}`;
   }
 
