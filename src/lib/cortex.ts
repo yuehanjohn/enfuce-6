@@ -119,22 +119,39 @@ interface SearchResult {
 export async function braveSearch(query: string, maxResults = 5): Promise<SearchResult[]> {
   cortexLog(`braveSearch START`, { query, maxResults });
 
-  // CORTEX.SEARCH_PREVIEW does NOT accept bind parameters — using them causes
-  // Snowflake to wrap the integer literal in TO_CHAR() and reject it.
-  // Simple single-quote escaping is sufficient here; the query is AI-generated
-  // and the only problematic character in real names is the apostrophe.
-  const escapedQuery = query.replace(/'/g, "''");
+  // Snowflake Cortex doesn't expose Brave web search as a direct SQL function.
+  // SEARCH_PREVIEW is for Cortex Search Services (indexed docs), and
+  // CORTEX.COMPLETE doesn't support a 'tools' option for web search.
+  //
+  // Instead we use CORTEX.COMPLETE to gather background context from the LLM's
+  // training data. Not real-time, but provides useful sanctions/PEP context
+  // that the model already knows about.
+  const messages = [
+    {
+      role: "user",
+      content: `Provide up to ${maxResults} factual background items about: ${query}
+
+Return a JSON array where each object has:
+- "title": a short descriptive heading
+- "url": leave as empty string
+- "snippet": a 1-2 sentence factual summary
+
+Return ONLY the raw JSON array, no markdown fences, no extra text.`,
+    },
+  ];
+  const messagesJson = JSON.stringify(messages);
 
   const sql = `
-    SELECT PARSE_JSON(SNOWFLAKE.CORTEX.SEARCH_PREVIEW(
-      '${escapedQuery}',
-      ${maxResults}
-    )) AS results
+    SELECT SNOWFLAKE.CORTEX.COMPLETE(
+      'claude-3-5-sonnet',
+      PARSE_JSON(?),
+      {'temperature': 0, 'max_tokens': 2000}
+    ) AS response
   `;
 
   const t0 = Date.now();
   try {
-    const result = await executeQuery<{ results: string }>(sql);
+    const result = await executeQuery<{ response: string }>(sql, { "1": messagesJson });
     const ms = Date.now() - t0;
 
     if (result.rows.length === 0) {
@@ -142,8 +159,26 @@ export async function braveSearch(query: string, maxResults = 5): Promise<Search
       return [];
     }
 
-    const parsed = JSON.parse(result.rows[0].results as unknown as string);
-    const hits = (parsed.results ?? parsed ?? []).map((r: Record<string, string>) => ({
+    const raw = result.rows[0].response;
+    cortexLog(`braveSearch RAW (${ms}ms)`, { rawPreview: String(raw).slice(0, 300) });
+
+    // Cortex COMPLETE returns JSON with choices array
+    let text: string;
+    try {
+      const parsed = JSON.parse(raw);
+      text = parsed.choices?.[0]?.messages ?? parsed.choices?.[0]?.message?.content ?? String(raw);
+    } catch {
+      text = String(raw);
+    }
+
+    // Extract JSON array from the response (strip markdown fences if present)
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) {
+      cortexLog(`braveSearch NO JSON in response (${ms}ms)`, { text: text.slice(0, 200) });
+      return [];
+    }
+
+    const hits: SearchResult[] = JSON.parse(jsonMatch[0]).map((r: Record<string, string>) => ({
       title: r.title ?? "",
       url: r.url ?? "",
       snippet: r.snippet ?? r.description ?? "",
@@ -152,7 +187,7 @@ export async function braveSearch(query: string, maxResults = 5): Promise<Search
     cortexLog(`braveSearch OK (${ms}ms)`, {
       query,
       hits: hits.length,
-      urls: hits.map((h: SearchResult) => h.url),
+      urls: hits.map((h) => h.url),
     });
     return hits;
   } catch (err) {
