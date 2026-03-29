@@ -1,21 +1,14 @@
 import { NextResponse } from "next/server";
-import { fetchLayer1Flags, hasSnowflakeConnection } from "@/lib/screening/snowflake-queries";
 import {
   createWorkerSession,
   getSessionProgress,
   getWorkerSession,
   claimNextIndex,
 } from "@/lib/screening/worker-state";
+import { runtime } from "@/lib/screening/data";
 
 export async function POST(request: Request) {
   try {
-    if (!hasSnowflakeConnection()) {
-      return NextResponse.json(
-        { error: "Worker mode requires Snowflake connection" },
-        { status: 400 }
-      );
-    }
-
     const body = await request.json().catch(() => ({}));
     const requestedSessionId = typeof body.sessionId === "string" ? body.sessionId : "";
     const requestedMaxCases = Number(body.maxCases);
@@ -27,8 +20,7 @@ export async function POST(request: Request) {
     let session = requestedSessionId ? getWorkerSession(requestedSessionId) : null;
 
     if (!session || reset) {
-      const flags = await fetchLayer1Flags();
-      session = createWorkerSession(flags, maxCases, reset);
+      session = createWorkerSession(runtime.layer1Flags, maxCases, reset);
     }
 
     const claimIndex = claimNextIndex(session);

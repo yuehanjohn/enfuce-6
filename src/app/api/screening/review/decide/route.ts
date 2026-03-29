@@ -1,11 +1,6 @@
 // POST /api/screening/review/decide — Submit analyst decision
 import { NextResponse } from "next/server";
-import {
-  hasSnowflakeConnection,
-  submitDecision as sfSubmitDecision,
-  fetchQueueItemById as sfFetchQueue,
-} from "@/lib/screening/snowflake-queries";
-import { MOCK_QUEUE, decisions, auditLog } from "@/lib/screening/data";
+import { runtime } from "@/lib/screening/data";
 
 interface DecisionBody {
   queue_id: string;
@@ -22,36 +17,18 @@ export async function POST(request: Request) {
     if (!body.queue_id || !body.decision || !body.reason_category || !body.analyst_note) {
       return NextResponse.json(
         { error: "Missing required fields: queue_id, decision, reason_category, analyst_note" },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
     if (body.analyst_note.length < 10) {
       return NextResponse.json(
         { error: "Analyst note must be at least 10 characters" },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
-    if (hasSnowflakeConnection()) {
-      const queueItem = await sfFetchQueue(body.queue_id);
-      if (!queueItem) return NextResponse.json({ error: "Queue item not found" }, { status: 404 });
-
-      await sfSubmitDecision({
-        queueId: body.queue_id,
-        customerId: queueItem.customer_id,
-        resultId: queueItem.result_id,
-        decision: body.decision,
-        reasonCategory: body.reason_category,
-        analystNote: body.analyst_note,
-        chatTranscript: body.chat_transcript,
-      });
-
-      return NextResponse.json({ success: true, source: "snowflake" });
-    }
-
-    // Mock mode
-    const queueItem = MOCK_QUEUE.find((q) => q.queue_id === body.queue_id);
+    const queueItem = runtime.reviewQueue.find((q) => q.queue_id === body.queue_id);
     if (!queueItem) return NextResponse.json({ error: "Queue item not found" }, { status: 404 });
 
     queueItem.status = "DECIDED";
@@ -67,9 +44,9 @@ export async function POST(request: Request) {
       decided_at: new Date().toISOString(),
     };
 
-    decisions.push(decision);
+    runtime.decisions.push(decision);
 
-    auditLog.push({
+    runtime.auditLog.push({
       log_id: `AUDIT-L3-${Date.now()}`,
       customer_id: queueItem.customer_id,
       layer: 3,
@@ -91,7 +68,7 @@ export async function POST(request: Request) {
     console.error("Decision submission error:", error);
     return NextResponse.json(
       { error: "Failed to submit decision", details: String(error) },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

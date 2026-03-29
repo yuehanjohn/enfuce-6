@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Card, Button } from "@heroui/react";
 import { ConfidenceMeter } from "@/components/screening/ConfidenceMeter";
 import Link from "next/link";
@@ -25,9 +25,10 @@ export default function QueuePage() {
   const [queue, setQueue] = useState<QueueEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const initialLoadDone = useRef(false);
 
-  const loadQueue = async () => {
-    setLoading(true);
+  const loadQueue = useCallback(async (showLoading = false) => {
+    if (showLoading) setLoading(true);
     setError(null);
 
     const controller = new AbortController();
@@ -42,19 +43,27 @@ export default function QueuePage() {
       setQueue(Array.isArray(data.queue) ? data.queue : []);
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") {
-        setError("Queue request timed out. Snowflake may still be waking up. Please retry.");
+        if (!initialLoadDone.current) setError("Queue request timed out. Please retry.");
       } else {
-        setError("Failed to load queue. Please retry.");
+        if (!initialLoadDone.current) setError("Failed to load queue. Please retry.");
       }
     } finally {
       clearTimeout(timeout);
       setLoading(false);
+      initialLoadDone.current = true;
     }
-  };
+  }, []);
 
   useEffect(() => {
-    void loadQueue();
-  }, []);
+    void loadQueue(true);
+
+    // Auto-poll every 3 seconds so new cases from Layer 2 appear in real-time
+    const interval = setInterval(() => {
+      void loadQueue(false);
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [loadQueue]);
 
   return (
     <div className="space-y-6">
@@ -85,7 +94,7 @@ export default function QueuePage() {
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <p className="text-lg font-medium">Queue unavailable</p>
               <p className="text-sm text-default-500 mt-1">{error}</p>
-              <Button variant="primary" className="mt-4" onPress={loadQueue}>
+              <Button variant="primary" className="mt-4" onPress={() => loadQueue(true)}>
                 Retry
               </Button>
             </div>

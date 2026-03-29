@@ -4,7 +4,7 @@ import { Avatar, Dropdown } from "@heroui/react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 type NavItem = {
   href: string;
@@ -12,6 +12,25 @@ type NavItem = {
   match: (pathname: string) => boolean;
   Icon: React.FC<{ className?: string }>;
 };
+
+type ActivationStage = "idle" | "server" | "layer1" | "layer2" | "active";
+
+function IconPower({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
+      <line x1="12" y1="2" x2="12" y2="12" />
+    </svg>
+  );
+}
 
 function IconDashboard({ className }: { className?: string }) {
   return (
@@ -159,10 +178,28 @@ function EnfuseLogo({ collapsed }: { collapsed: boolean }) {
   );
 }
 
+const STAGE_LABELS: Record<ActivationStage, string> = {
+  idle: "Activate",
+  server: "Starting server…",
+  layer1: "Running Layer 1…",
+  layer2: "Running Layer 2…",
+  active: "Active",
+};
+
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
+  const [stage, setStage] = useState<ActivationStage>("idle");
+  const [layer2Progress, setLayer2Progress] = useState<{ done: number; total: number } | null>(
+    null
+  );
+  const [queueCount, setQueueCount] = useState(0);
+  const activatingRef = useRef(false);
 
   const handleSignOut = useCallback(async () => {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -173,6 +210,68 @@ export function Sidebar() {
   const handleSettings = useCallback(() => {
     router.push("/settings/profile");
   }, [router]);
+
+  const handleActivate = useCallback(async () => {
+    if (activatingRef.current || stage !== "idle") return;
+    activatingRef.current = true;
+
+    try {
+      // Stage 1: Server activation (~1s)
+      setStage("server");
+      await sleep(1200);
+
+      // Stage 2: Layer 1 — screen 10,000 customers (~500ms)
+      setStage("layer1");
+      const l1Res = await fetch("/api/screening/run", { method: "POST" });
+      const l1Data = await l1Res.json();
+      const flags: { flag_id: string }[] = l1Data.flags ?? [];
+
+      // Stage 3: Layer 2 — process each flagged case one-by-one (~10s each)
+      // HUMAN_REVIEW cases are pushed to the queue as they complete
+      setStage("layer2");
+      setLayer2Progress({ done: 0, total: flags.length });
+      let qCount = 0;
+
+      for (let i = 0; i < flags.length; i++) {
+        const res = await fetch("/api/screening/layer2-process-one", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ flag_id: flags[i].flag_id }),
+        });
+        const data = await res.json();
+        setLayer2Progress({ done: i + 1, total: flags.length });
+
+        if (data.routing === "HUMAN_REVIEW") {
+          qCount = data.queue_count ?? qCount + 1;
+          setQueueCount(qCount);
+        }
+      }
+
+      setStage("active");
+      setLayer2Progress(null);
+    } catch (err) {
+      console.error("Activation failed:", err);
+      setStage("idle");
+      setLayer2Progress(null);
+    } finally {
+      activatingRef.current = false;
+    }
+  }, [stage]);
+
+  // When active, navigate to queue on badge click
+  const handleQueueClick = useCallback(() => {
+    router.push("/queue");
+  }, [router]);
+
+  const isRunning = stage === "server" || stage === "layer1" || stage === "layer2";
+  const isActive = stage === "active";
+
+  // Pulse animation for the activate button when running
+  const buttonColor = isActive
+    ? "bg-emerald-500 text-white hover:bg-emerald-600"
+    : isRunning
+      ? "bg-blue-500 text-white animate-pulse"
+      : "bg-neutral-200 text-neutral-700 hover:bg-neutral-300";
 
   return (
     <aside
@@ -209,9 +308,49 @@ export function Sidebar() {
         )}
       </div>
 
+      {/* Activate Button */}
+      <div className={`shrink-0 px-2 pb-2 ${collapsed ? "flex justify-center" : ""}`}>
+        <button
+          type="button"
+          onClick={isActive ? handleQueueClick : handleActivate}
+          disabled={isRunning}
+          title={
+            collapsed
+              ? isActive
+                ? `Active — ${queueCount} in queue`
+                : STAGE_LABELS[stage]
+              : undefined
+          }
+          className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-semibold transition-all ${buttonColor} ${
+            collapsed ? "justify-center px-2" : ""
+          } ${isRunning ? "cursor-wait" : "cursor-pointer"}`}
+        >
+          <IconPower className={`size-5 shrink-0 ${isRunning ? "animate-spin" : ""}`} />
+          {!collapsed && (
+            <div className="flex flex-col items-start min-w-0">
+              <span className="truncate">
+                {stage === "layer2" && layer2Progress
+                  ? `Layer 2: ${layer2Progress.done}/${layer2Progress.total}`
+                  : STAGE_LABELS[stage]}
+              </span>
+              {isActive && queueCount > 0 && (
+                <span className="text-xs font-normal opacity-80">
+                  {queueCount} case{queueCount !== 1 ? "s" : ""} in review queue
+                </span>
+              )}
+            </div>
+          )}
+          {collapsed && isActive && queueCount > 0 && (
+            <span className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white">
+              {queueCount}
+            </span>
+          )}
+        </button>
+      </div>
+
       <nav className="flex flex-1 flex-col gap-1 px-2 pt-1">
         {navItems.map((item) => {
-          const isActive = item.match(pathname);
+          const isItemActive = item.match(pathname);
           const { Icon } = item;
           return (
             <Link
@@ -219,7 +358,7 @@ export function Sidebar() {
               href={item.href}
               title={collapsed ? item.label : undefined}
               className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-neutral-800 transition-colors hover:bg-neutral-300/40 ${
-                isActive ? "bg-neutral-300/70 text-neutral-900" : ""
+                isItemActive ? "bg-neutral-300/70 text-neutral-900" : ""
               } ${collapsed ? "justify-center px-2" : ""}`}
             >
               <Icon className="size-5 shrink-0 text-neutral-700" />

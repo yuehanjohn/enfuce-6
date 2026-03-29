@@ -1,30 +1,16 @@
 import { NextResponse } from "next/server";
+import { getSessionProgress, getWorkerSession, markProcessed } from "@/lib/screening/worker-state";
 import {
-  buildLayer2Inputs,
-  hasSnowflakeConnection,
-  saveLayer2Results,
-} from "@/lib/screening/snowflake-queries";
-import { processCase } from "@/lib/screening/layer2";
-import { buildFastPassResult, evaluateFastPass } from "@/lib/screening/policy";
-import {
-  getSessionProgress,
-  getWorkerSession,
-  markFailed,
-  markProcessed,
-} from "@/lib/screening/worker-state";
+  runtime,
+  findCustomer,
+  findSanctionsEntry,
+  generateLayer2Result,
+} from "@/lib/screening/data";
 
 export async function POST(request: Request) {
-  let sessionId = "";
   try {
-    if (!hasSnowflakeConnection()) {
-      return NextResponse.json(
-        { error: "Worker mode requires Snowflake connection" },
-        { status: 400 }
-      );
-    }
-
     const body = await request.json().catch(() => ({}));
-    sessionId = typeof body.sessionId === "string" ? body.sessionId : "";
+    const sessionId = typeof body.sessionId === "string" ? body.sessionId : "";
     const claimIndex = Number(body.claimIndex);
 
     if (!sessionId || !Number.isFinite(claimIndex)) {
@@ -42,29 +28,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid claim index" }, { status: 400 });
     }
 
-    const inputs = await buildLayer2Inputs([flag]);
-    if (inputs.length === 0) {
-      markFailed(session);
+    const customer = findCustomer(flag.customer_id);
+    const sanction = findSanctionsEntry(flag.entity_id);
+    if (!customer || !sanction) {
       markProcessed(session, idx);
       return NextResponse.json({
         success: false,
         skipped: true,
-        reason: "Could not resolve customer/watchlist records for flag",
         progress: getSessionProgress(session),
       });
     }
 
-    const fastDecision = evaluateFastPass(flag);
-    const mode = fastDecision ? "fast" : "deep";
-    const result = fastDecision
-      ? buildFastPassResult(flag, fastDecision)
-      : await processCase(inputs[0]);
+    const result = generateLayer2Result(flag, customer, sanction);
+    runtime.layer2Results.push(result);
 
-    await saveLayer2Results([result], {
-      clearExisting: session.resetRequested && !session.resetDone,
-    });
-    session.resetDone = true;
-
+    const mode = result.combined_score >= 85 ? "fast" : "deep";
     markProcessed(session, idx);
 
     return NextResponse.json({
@@ -74,10 +52,6 @@ export async function POST(request: Request) {
       progress: getSessionProgress(session),
     });
   } catch (error) {
-    const session = sessionId ? getWorkerSession(sessionId) : null;
-    if (session) {
-      markFailed(session);
-    }
     return NextResponse.json(
       { error: "Failed to process case", details: String(error) },
       { status: 500 }

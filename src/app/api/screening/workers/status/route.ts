@@ -1,20 +1,9 @@
 import { NextResponse } from "next/server";
-import {
-  fetchLayer2Results,
-  hasSnowflakeConnection,
-  runLayer2Processing,
-} from "@/lib/screening/snowflake-queries";
 import { getSessionProgress, getWorkerSession } from "@/lib/screening/worker-state";
+import { runtime } from "@/lib/screening/data";
 
 export async function GET(request: Request) {
   try {
-    if (!hasSnowflakeConnection()) {
-      return NextResponse.json(
-        { error: "Worker mode requires Snowflake connection" },
-        { status: 400 }
-      );
-    }
-
     const { searchParams } = new URL(request.url);
     const sessionId = searchParams.get("sessionId") ?? "";
     if (!sessionId) {
@@ -26,7 +15,13 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unknown session" }, { status: 404 });
     }
 
-    const [summary, results] = await Promise.all([runLayer2Processing(), fetchLayer2Results()]);
+    const results = runtime.layer2Results;
+    const summary = {
+      total: results.length,
+      auto_restrict: results.filter((r) => r.routing === "AUTO_RESTRICT").length,
+      auto_clear: results.filter((r) => r.routing === "AUTO_CLEAR").length,
+      human_review: results.filter((r) => r.routing === "HUMAN_REVIEW").length,
+    };
 
     return NextResponse.json({
       success: true,

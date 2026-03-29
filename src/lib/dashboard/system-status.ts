@@ -69,7 +69,7 @@ function buildAiSummary(services: SystemStatusService[]): string {
 export function getMockSystemStatus(): SystemStatusResponse {
   const services: SystemStatusService[] = [
     {
-      name: "Analytics",
+      name: "Layer 1 — Data Warehouse",
       state: "Operational",
       uptime: "99.76%",
       segments: buildSegments([
@@ -90,7 +90,7 @@ export function getMockSystemStatus(): SystemStatusResponse {
             title: "Temporary outage",
             duration: "6 min",
             when: "9h ago",
-            detail: "Event ingestion restarted after a failed worker deploy.",
+            detail: "Data ingestion restarted after a failed worker deploy.",
           },
         ],
         [
@@ -100,13 +100,13 @@ export function getMockSystemStatus(): SystemStatusResponse {
             title: "Service degraded",
             duration: "4 min",
             when: "7h ago",
-            detail: "Backfill jobs increased processing delay for dashboards.",
+            detail: "Backfill jobs increased processing delay for warehouse sync.",
           },
         ],
       ]),
     },
     {
-      name: "API Gateway",
+      name: "Layer 2 — AI",
       state: "Operational",
       uptime: "99.82%",
       segments: buildSegments([
@@ -117,13 +117,13 @@ export function getMockSystemStatus(): SystemStatusResponse {
             title: "Temporary outage",
             duration: "5 min",
             when: "9h ago",
-            detail: "Regional failover completed and traffic recovered automatically.",
+            detail: "Model inference recovered automatically after regional failover.",
           },
         ],
       ]),
     },
     {
-      name: "Auth",
+      name: "Layer 3 — Search",
       state: "Operational",
       uptime: "99.82%",
       segments: buildSegments([
@@ -131,13 +131,19 @@ export function getMockSystemStatus(): SystemStatusResponse {
           12,
           "incident",
           {
-            title: "Login errors",
+            title: "Search errors",
             duration: "5 min",
             when: "9h ago",
-            detail: "Token refresh retries spiked before the session service stabilized.",
+            detail: "Search index retries spiked before the service stabilized.",
           },
         ],
       ]),
+    },
+    {
+      name: "Database",
+      state: "Operational",
+      uptime: "100.00%",
+      segments: buildSegments([]),
     },
   ];
 
