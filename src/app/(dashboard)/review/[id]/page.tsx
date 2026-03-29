@@ -386,7 +386,7 @@ function ReasoningTrailCard({ result }: { result: Layer2Result }) {
 
   return (
     <Card className="h-full">
-      <Card.Content className="flex h-full flex-col gap-5 p-5">
+      <Card.Content className="flex h-full flex-col gap-5 overflow-y-auto p-5">
         <div className="space-y-4">
           <p className="text-xl font-semibold text-foreground">AI Reasoning Trail</p>
 

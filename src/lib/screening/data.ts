@@ -550,28 +550,31 @@ export function resetRuntime() {
 
 // ── Human-readable reasoning builder ───────────────────────────────
 
-// Per-entity research context used to generate realistic AI reasoning
+// Per-entity research context used to generate 3-paragraph AI reasoning:
+// Paragraph 1: Why this could be the same person
+// Paragraph 2: Why this is likely not the same person
+// Paragraph 3: Recommendation for the reviewer
 const ENTITY_RESEARCH: Record<
   string,
   {
-    couldBe: string[];
-    couldNotBe: string[];
+    /** Paragraph arguing why the customer could be the sanctioned individual */
+    couldBeTemplate: string;
+    /** Paragraph arguing why the customer is likely not the sanctioned individual */
+    couldNotBeTemplate: string;
+    /** Paragraph with assessment and recommended next steps */
+    assessmentTemplate: string;
     customerContextTemplate: string;
     sanctionsContext: string;
     sources: Source[];
   }
 > = {
   "OFAC-12345": {
-    couldBe: [
-      'The name "{customerName}" is a close match to the OFAC-listed individual "Ahmad Al-Hassan," who was designated on the SDN List on January 15, 2023 for providing financial facilitation services to sanctioned entities in the Middle East (Source: OFAC Recent Actions, treasury.gov).',
-      '"Ahmad Al-Hassan" and common transliterations such as "Ahmed Al Hassan" are known aliases of the designated person, making name-based matches inherently ambiguous without further biographical verification (Source: OFAC SDN List, treasury.gov).',
-      "The designated individual was born in Tripoli, Lebanon and has operated across multiple Middle Eastern jurisdictions, meaning a geographic connection to the broader region could indicate relevance (Source: UN Security Council Consolidated List).",
-    ],
-    couldNotBe: [
-      "The customer is a {customerNationality} national born on {customerDob}, while the sanctioned Ahmad Al-Hassan is a Lebanese citizen born on 1976-05-20 in Tripoli — a {dobDiff}-year age gap and different nationality substantially reduce the likelihood of a true match (Source: OFAC SDN Entry OFAC-12345).",
-      '"Ahmad Al-Hassan" is among the most common Arabic names across the Middle East and North Africa, with thousands of individuals sharing this name in the UK alone according to ONS naming statistics, making coincidental matches highly probable (Source: UK Office for National Statistics, ons.gov.uk).',
-      "Public records searches show no financial or business connections between the customer\u2019s address in the {customerNationality} and the sanctioned individual\u2019s known associates operating out of Beirut, Lebanon (Source: Companies House, OpenCorporates).",
-    ],
+    couldBeTemplate:
+      'There are credible reasons to investigate whether {customerName} could be the sanctioned Ahmad Al-Hassan. The customer\'s name is a close variant of the OFAC-listed individual "Ahmad Al-Hassan," who was designated on the SDN List on January 15, 2023 for providing financial facilitation services to sanctioned entities in the Middle East (Source: OFAC Recent Actions, treasury.gov). The designated person\'s known aliases — including "Ahmad Hassan," "Ahmed Al Hassan," and "Abu Ahmad" — demonstrate that transliteration variants are officially documented, meaning the customer\'s name could represent yet another romanization of the same Arabic name أحمد الحسن. Additionally, the designated individual was born in Tripoli, Lebanon and has operated as a financial intermediary across multiple Middle Eastern jurisdictions, and any geographic or financial connection the customer may have to the broader region could indicate relevance (Source: UN Security Council Consolidated List).',
+    couldNotBeTemplate:
+      "However, several factors strongly suggest this is not the same person. The customer is a {customerNationality} national born on {customerDob}, while the sanctioned Ahmad Al-Hassan is a Lebanese citizen born on May 20, 1976 in Tripoli — a {dobDiff}-year age gap and different nationality substantially reduce the likelihood of a true match (Source: OFAC SDN Entry OFAC-12345). Critically, \"Ahmad Al-Hassan\" and its variants are among the most common Arabic names across the Middle East and North Africa. Research from the UK Office for National Statistics shows thousands of individuals sharing this name reside in the UK alone, and globally the name appears in census records across Lebanon, Syria, Egypt, Iraq, Jordan, and the Palestinian territories, making coincidental matches statistically highly probable (Source: ONS, ons.gov.uk). Furthermore, public records searches through Companies House and OpenCorporates show no financial or business connections between the customer's profile and the sanctioned individual's known network of shell companies operating out of Beirut.",
+    assessmentTemplate:
+      "On balance, the name similarity warrants a flag but the weight of evidence — including the {dobDiff}-year DOB discrepancy, nationality mismatch, and the extremely high frequency of this name in Arabic-speaking populations — points toward a false positive. The reviewer should request the customer's passport copy to verify the full legal name and any patronymic identifiers, and cross-reference transaction history for any connections to Lebanon or the entities named in the OFAC designation. If no corroborating indicators emerge, this case can be cleared with a documented rationale. Combined assessment score: {combinedScore}%.",
     customerContextTemplate:
       "Public records indicate {customerName} is a {customerNationality} resident with no known ties to Lebanon or sanctioned financial networks. The name is extremely common in Arabic-speaking communities worldwide, appearing in UK census data as one of the top 200 surnames of Arabic origin (Source: ONS, ons.gov.uk).",
     sanctionsContext:
@@ -592,16 +595,12 @@ const ENTITY_RESEARCH: Record<
     ],
   },
   "OFAC-67890": {
-    couldBe: [
-      'The customer\'s name closely matches "Viktor Sergeyevich Petrov," designated on the OFAC SDN List on June 10, 2022 under E.O. 14024 for operating in the Russian financial services sector (Source: OFAC Recent Actions, treasury.gov).',
-      'The sanctioned individual is known to use shortened name variants including "Viktor Petrov" and the Cyrillic form "Виктор Петров," which are consistent with the customer\u2019s name on file (Source: OFAC SDN List, treasury.gov).',
-      "Both the customer and the sanctioned person have documented ties to Russia, and the sanctioned Petrov is known to have held accounts at multiple international financial institutions before designation (Source: EU Council Decision 2022/1530).",
-    ],
-    couldNotBe: [
-      "The customer was born on {customerDob} while the designated Viktor Petrov was born on November 22, 1965 in Saint Petersburg — the {dobDiff}-year discrepancy and distinct biographical details suggest these are different individuals (Source: OFAC SDN Entry OFAC-67890).",
-      '"Viktor Petrov" is one of the most common Russian male names, comparable to "John Smith" in English — the Russian Federal Statistics Service records tens of thousands of individuals with this exact name (Source: Rosstat, rosstat.gov.ru).',
-      "The sanctioned individual held senior positions in Russian state-linked financial institutions and was based in Moscow, while the customer\u2019s profile shows no corporate directorships or connections to Russian state enterprises (Source: EU Sanctions Map, sanctionsmap.eu).",
-    ],
+    couldBeTemplate:
+      'There are indicators that {customerName} could potentially be the sanctioned Viktor Sergeyevich Petrov. The customer\'s name closely matches the OFAC-designated individual, who was placed on the SDN List on June 10, 2022 pursuant to Executive Order 14024 for operating in the Russian financial services sector (Source: OFAC Recent Actions, treasury.gov). The sanctioned individual is documented as using shortened name variants including "Viktor Petrov" and the Cyrillic form "Виктор Петров," both of which are consistent with the customer\'s name on file. Investigative reporting by The Guardian and Novaya Gazeta linked the designated Petrov to a network of Moscow-based financial firms that facilitated capital flows for sanctioned Russian state enterprises following the 2022 invasion of Ukraine (Source: EU Council Decision 2022/1530). Both the customer and the sanctioned person share ties to Russia, and the sanctioned Petrov is known to have held accounts at multiple international financial institutions before his designation.',
+    couldNotBeTemplate:
+      'Significant evidence suggests these are different individuals. The customer was born on {customerDob} while the designated Viktor Petrov was born on November 22, 1965 in Saint Petersburg — the {dobDiff}-year discrepancy is a meaningful biographical difference that cannot easily be attributed to clerical error in Russian civil registry systems, which are generally well-maintained for this era (Source: OFAC SDN Entry OFAC-67890). Additionally, "Viktor Petrov" is one of the most common Russian male name combinations, comparable to "John Smith" in English — Petrov is Russia\'s fourth most common surname (approximately 1.3 million bearers), and the Russian Federal Statistics Service records tens of thousands of individuals with this exact first-last combination (Source: Rosstat, rosstat.gov.ru). The sanctioned individual held senior positions in Russian state-linked financial institutions and was based in Moscow, while the customer\'s profile shows no corporate directorships, state-enterprise connections, or activity in the financial services sector.',
+    assessmentTemplate:
+      'The name match creates a screening obligation, but the {dobDiff}-year DOB gap, the extraordinary frequency of "Viktor Petrov" in the Russian population, and the absence of any financial-sector or state-enterprise connections in the customer\'s profile collectively suggest a false positive. The reviewer should verify the customer\'s full legal name including patronymic — if it is "Sergeyevich," the case should be escalated regardless of other differences. Otherwise, confirm no transaction patterns link to the entities in the OFAC designation and clear with documented rationale. Combined assessment score: {combinedScore}%.',
     customerContextTemplate:
       'Public records indicate {customerName} is a {customerNationality} national. "Viktor Petrov" is an extremely common Russian name, ranking among the top 50 most frequent full-name combinations according to Russian census data (Source: Rosstat, rosstat.gov.ru). No corporate links to Russian state entities were identified.',
     sanctionsContext:
@@ -619,16 +618,12 @@ const ENTITY_RESEARCH: Record<
     ],
   },
   "UN-54321": {
-    couldBe: [
-      'The customer\'s name is a close variant of "John Michael Smith," listed on the UN Security Council Consolidated List since August 22, 2019 for involvement in proliferation financing activities (Source: UN Security Council Sanctions List, un.org).',
-      "Both the customer and the sanctioned individual share connections to the United Kingdom, where the designated John Michael Smith was last known to reside in London (Source: UN SC Consolidated List; HM Treasury Sanctions List).",
-      'The sanctioned individual is known to use the shortened alias "J. Smith," which could easily correspond to any number of common name presentations in banking records (Source: UN SC Consolidated List).',
-    ],
-    couldNotBe: [
-      '"John Smith" is the single most common full name in the English-speaking world — the UK\u2019s Office for National Statistics estimates over 36,000 individuals named John Smith currently reside in England and Wales alone, making false positives statistically near-certain (Source: ONS, ons.gov.uk).',
-      "The customer was born on {customerDob} while the designated individual was born February 14, 1970 — the {dobDiff}-year age difference is a strong indicator of distinct identities (Source: UN SC Entry UN-54321).",
-      "The sanctioned John Michael Smith was specifically linked to proliferation financing networks in Southeast Asia, while no such geographic or financial connections appear in the customer\u2019s transaction history or public records (Source: UN Panel of Experts Report S/2019/691).",
-    ],
+    couldBeTemplate:
+      'There are surface-level indicators that {customerName} could be connected to the sanctioned John Michael Smith. The customer\'s name is a close variant of the individual listed on the UN Security Council Consolidated List since August 22, 2019 for involvement in proliferation financing activities (Source: UN Security Council Sanctions List, un.org). The sanctioned individual is known to use the shortened alias "J. Smith," which could correspond to many common name presentations in banking records. BBC and Financial Times reporting from 2019 noted that the designated Smith operated as a financial intermediary arranging financing for dual-use technology transfers through UK-registered shell companies, and the customer shares a connection to the United Kingdom, where the designated John Michael Smith was last known to reside in London (Source: UN SC Consolidated List; HM Treasury Sanctions List).',
+    couldNotBeTemplate:
+      "The evidence against this being the same person is substantial. \"John Smith\" is the single most common full name in the English-speaking world — the UK's Office for National Statistics estimates over 36,000 individuals named John Smith currently reside in England and Wales alone, and the U.S. Social Security Administration records tens of thousands more, making false positives from sanctions screening systems statistically near-certain for this name (Source: ONS, ons.gov.uk). The customer was born on {customerDob} while the designated individual was born February 14, 1970 — the {dobDiff}-year age difference is a strong indicator of distinct identities (Source: UN SC Entry UN-54321). Furthermore, the sanctioned John Michael Smith was specifically linked to proliferation financing networks operating in Southeast Asia, with the UN Panel of Experts report S/2019/691 detailing shell company structures in London's financial district used to channel payments. No geographic, financial, or professional connections link this customer to those activities.",
+    assessmentTemplate:
+      'Given the extreme frequency of the name "John Smith," the {dobDiff}-year DOB discrepancy, and the absence of any proliferation-finance indicators in the customer\'s profile, this is very likely a false positive. The reviewer should verify the customer\'s full legal name (specifically whether a middle name "Michael" is present), confirm the DOB against identity documents, and check for any connections to the UK financial sector or Southeast Asian transactions. If none corroborate, this case should be cleared. Combined assessment score: {combinedScore}%.',
     customerContextTemplate:
       'Public records show {customerName} is a {customerNationality} national. The name "John Smith" is the most common male full name in the English-speaking world, with over 36,000 bearers in England and Wales per ONS data (Source: ons.gov.uk). No links to proliferation financing networks were identified.',
     sanctionsContext:
@@ -649,16 +644,12 @@ const ENTITY_RESEARCH: Record<
     ],
   },
   "EU-11111": {
-    couldBe: [
-      'The customer\'s name closely matches "Maria Santos," listed on the EU Sanctions List since March 1, 2024 for involvement in drug trafficking networks operating across Central America (Source: EU Restrictive Measures, ec.europa.eu).',
-      'The sanctioned individual is of Mexican nationality and the customer also has ties to Latin America, where the name "Maria Santos" is widely used across multiple countries (Source: EU Council Regulation 2024/0301).',
-      'Known aliases for the sanctioned person include "M. Santos" and "Maria S. Rodriguez," both of which could plausibly match common Latin American naming conventions involving maternal and paternal surnames (Source: EU Sanctions List).',
-    ],
-    couldNotBe: [
-      '"Maria Santos" is one of the most common female names in the Spanish and Portuguese-speaking world — Brazil alone records over 120,000 individuals with this exact name according to IBGE census data, and it is similarly prevalent across Mexico, Colombia, and other Latin American countries (Source: IBGE, ibge.gov.br).',
-      "The customer was born on {customerDob} while the designated Maria Santos was born December 18, 1983 in Guadalajara, Mexico — the {dobDiff}-year age gap and distinct birthplaces suggest different individuals (Source: EU Sanctions Entry EU-11111).",
-      "The sanctioned individual\u2019s drug trafficking network operated specifically in the Mexico-Guatemala-Honduras corridor, and no law enforcement or open-source intelligence links the customer to those geographic regions or criminal activities (Source: UNODC World Drug Report 2024; Europol SOCTA 2024).",
-    ],
+    couldBeTemplate:
+      'There are reasons to investigate whether {customerName} could be the sanctioned Maria Santos. The customer\'s name closely matches the individual listed on the EU Sanctions List since March 1, 2024 for involvement in drug trafficking networks operating across Central America (Source: EU Restrictive Measures, ec.europa.eu). Known aliases for the sanctioned person include "M. Santos" and "Maria S. Rodriguez," both of which reflect common Latin American naming conventions involving maternal and paternal surnames, meaning the customer could be using a shortened form of a longer legal name. Europol\'s public threat assessment linked the designated Santos to a cartel logistics operation responsible for coordinating shipments through Central American transit corridors into Europe, and El País and EFE reported that the designation followed a joint EU-Mexican investigation resulting in asset freezes across multiple EU member states (Source: EU Council Regulation 2024/0301).',
+    couldNotBeTemplate:
+      "However, the evidence against identification is compelling. \"Maria Santos\" is one of the most common female names in the Spanish and Portuguese-speaking world — Brazil alone records over 120,000 individuals with this exact name according to IBGE census data, and it is similarly prevalent across Mexico, Colombia, the Philippines, and other countries, making coincidental screening matches statistically almost inevitable (Source: IBGE, ibge.gov.br). The customer was born on {customerDob} while the designated Maria Santos was born December 18, 1983 in Guadalajara, Mexico — the {dobDiff}-year age gap and distinct birthplaces suggest these are different people (Source: EU Sanctions Entry EU-11111). The sanctioned individual's drug trafficking network operated specifically in the Mexico-Guatemala-Honduras corridor according to the UNODC World Drug Report 2024 and Europol's SOCTA 2024 assessment, and no law enforcement records or open-source intelligence links this customer to those geographic regions or criminal activities.",
+    assessmentTemplate:
+      'The name "Maria Santos" generates an exceptionally high false-positive rate in sanctions screening due to its frequency across Latin America. Combined with the {dobDiff}-year DOB gap and absence of any connections to Central American drug trafficking corridors, this is most likely a coincidental match. The reviewer should verify the customer\'s full legal name (including any maternal surname), confirm DOB and place of birth against identity documents, and check transaction history for any Central American nexus. If no corroborating evidence emerges, this case should be cleared. Combined assessment score: {combinedScore}%.',
     customerContextTemplate:
       'Public records indicate {customerName} is a {customerNationality} national. "Maria Santos" is among the most common female names in Latin America, with over 120,000 registered bearers in Brazil alone (Source: IBGE, ibge.gov.br). No links to organized crime or drug trafficking were identified.',
     sanctionsContext:
@@ -676,16 +667,12 @@ const ENTITY_RESEARCH: Record<
     ],
   },
   "OFAC-99999": {
-    couldBe: [
-      'The customer\'s name closely matches "Chen Wei Lin," designated on the OFAC SDN List on September 15, 2024 for facilitating technology transfer to entities supporting advanced weapons programs (Source: OFAC Recent Actions, treasury.gov).',
-      'The sanctioned individual is known to operate under shortened names including "Chen Wei" and "C.W. Lin," which are consistent with common Chinese naming conventions where the given name may be written with or without spaces (Source: OFAC SDN List).',
-      "Both the customer and sanctioned individual are linked to China, and the designated Chen Wei Lin operated out of Shenzhen, a major technology hub where cross-border technology transfers frequently occur (Source: Bureau of Industry and Security Entity List, bis.doc.gov).",
-    ],
-    couldNotBe: [
-      '"Chen Wei" is one of the most common name combinations in China — the Ministry of Public Security\u2019s 2023 name report estimates over 300,000 individuals share this exact given-name and surname pairing in mainland China alone (Source: China MPS National Name Report 2023).',
-      "The customer was born on {customerDob} while the sanctioned Chen Wei Lin was born January 28, 1972 in Shanghai — the {dobDiff}-year age difference and distinct biographical background suggest these are different people (Source: OFAC SDN Entry OFAC-99999).",
-      "The sanctioned individual was specifically linked to advanced weapons program procurement networks operating between Shenzhen and entities in North Korea and Iran, while the customer\u2019s profile shows no ties to the defense or technology transfer sectors (Source: UN Panel of Experts on DPRK S/2024/312; BIS Entity List).",
-    ],
+    couldBeTemplate:
+      'There are indicators that {customerName} could be linked to the sanctioned Chen Wei Lin. The customer\'s name closely matches the individual designated on the OFAC SDN List on September 15, 2024 for facilitating technology transfer to entities supporting advanced weapons programs (Source: OFAC Recent Actions, treasury.gov). The sanctioned individual is documented as operating under shortened names including "Chen Wei" and "C.W. Lin," which are consistent with standard Chinese naming conventions where given names may be written with or without spaces between syllables. Both the customer and sanctioned individual are linked to China, and the designated Chen Wei Lin operated out of Shenzhen — a major technology hub in the Pearl River Delta where cross-border technology transfers and semiconductor procurement frequently occur. The South China Morning Post and CSIS identified Chen as a mid-level broker arranging procurement of controlled semiconductor equipment through intermediary companies (Source: Bureau of Industry and Security Entity List, bis.doc.gov).',
+    couldNotBeTemplate:
+      "Strong evidence suggests these are different individuals. \"Chen Wei\" is one of the most common name combinations in China — the Ministry of Public Security's 2023 national name report estimates over 300,000 individuals share this exact given-name and surname pairing in mainland China alone, making it statistically one of the highest-frequency names in the world (Source: China MPS National Name Report 2023). The customer was born on {customerDob} while the sanctioned Chen Wei Lin was born January 28, 1972 in Shanghai — the {dobDiff}-year age difference and distinct biographical backgrounds suggest different people (Source: OFAC SDN Entry OFAC-99999). Furthermore, the sanctioned individual was specifically linked to advanced weapons program procurement networks operating between Shenzhen and entities in North Korea and Iran according to the UN Panel of Experts report S/2024/312, and the customer's profile shows no ties to the defense sector, technology transfer activities, or the specific Pearl River Delta procurement networks described in the BIS Entity List.",
+    assessmentTemplate:
+      "The extreme frequency of \"Chen Wei\" in the Chinese population, combined with the {dobDiff}-year DOB discrepancy and absence of any technology-transfer or defense-sector connections, strongly suggests a false positive. The reviewer should verify the customer's full legal name in Chinese characters (陈伟 vs. 陈威 vs. other homophone variations), confirm DOB against identity documents, and check whether the customer has any business connections to Shenzhen's technology corridor or the entities named in the OFAC designation. If no additional corroborating indicators emerge, this case can be cleared. Combined assessment score: {combinedScore}%.",
     customerContextTemplate:
       'Public records indicate {customerName} is a {customerNationality} national. "Chen Wei" is among the most common name combinations in China, with over 300,000 bearers according to the Ministry of Public Security\u2019s 2023 name report (Source: China MPS). No links to technology transfer or weapons procurement networks were identified.',
     sanctionsContext:
@@ -708,10 +695,10 @@ function buildHumanReadableReasoning(
   customer: Customer,
   sanction: SanctionsEntry,
   flag: Layer1Flag,
-  matchingSignals: string[],
-  conflictingSignals: string[],
+  _matchingSignals: string[],
+  _conflictingSignals: string[],
   combinedScore: number,
-  routing: RoutingDecision
+  _routing: RoutingDecision
 ): {
   reasoning: string;
   customerBackground: string;
@@ -723,12 +710,9 @@ function buildHumanReadableReasoning(
   // Fallback for unknown entities
   if (!research) {
     const reasoning =
-      `The customer "${customer.full_name}" (${customer.nationality}, born ${customer.dob}) was flagged against sanctions entity "${sanction.entity_name}" on the ${sanction.authority} ${sanction.list_name}. ` +
-      `The name similarity score is ${flag.name_score.toFixed(2)} (Jaro-Winkler), suggesting a ${flag.name_score >= 0.9 ? "strong" : "partial"} textual match. ` +
-      (conflictingSignals.length > 0
-        ? `However, key differences exist: ${conflictingSignals.join("; ")}. `
-        : "") +
-      `Combined assessment score: ${combinedScore}%. Routing: ${routing}.`;
+      `There are indicators that "${customer.full_name}" could be the sanctioned "${sanction.entity_name}." The name similarity score is ${flag.name_score.toFixed(2)} (Jaro-Winkler), suggesting a ${flag.name_score >= 0.9 ? "strong" : "partial"} textual match. The sanctioned individual was designated by ${sanction.authority} on the ${sanction.list_name} on ${sanction.effective_date} for the following: ${sanction.entity_notes}\n\n` +
+      `However, the available evidence suggests these may be different individuals. The customer is a ${customer.nationality} national born ${customer.dob}, while the sanctioned entity is from ${sanction.nationality_country} with DOB ${sanction.dob}. Without additional corroborating identifiers beyond the name match, the probability of a true identification remains limited.\n\n` +
+      `The reviewer should compare all available identifiers — full legal name, date of birth, nationality, address, and any document numbers — against the complete designation file before making a determination. Combined assessment score: ${combinedScore}%.`;
 
     return {
       reasoning,
@@ -749,21 +733,15 @@ function buildHumanReadableReasoning(
       .replace(/\{customerName\}/g, customer.full_name)
       .replace(/\{customerNationality\}/g, customer.nationality)
       .replace(/\{customerDob\}/g, customer.dob)
-      .replace(/\{dobDiff\}/g, String(dobDiff));
+      .replace(/\{dobDiff\}/g, String(dobDiff))
+      .replace(/\{combinedScore\}/g, String(combinedScore));
 
-  // Select 1-2 "could be" and 1-2 "could not be" sentences based on signals
-  const couldBeCount = matchingSignals.length >= 2 ? 2 : 1;
-  const couldNotBeCount =
-    conflictingSignals.length >= 2 ? 2 : Math.min(2, research.couldNotBe.length);
-
-  const couldBeSentences = research.couldBe.slice(0, couldBeCount).map(fillTemplate);
-  const couldNotBeSentences = research.couldNotBe.slice(0, couldNotBeCount).map(fillTemplate);
-
-  const reasoning =
-    couldBeSentences.join(" ") +
-    " " +
-    couldNotBeSentences.join(" ") +
-    ` Assessment: ${combinedScore}% combined match confidence — routed to ${routing === "HUMAN_REVIEW" ? "human review" : routing === "AUTO_RESTRICT" ? "automatic restriction" : "automatic clearance"}.`;
+  // Build 3-paragraph reasoning: could be, could not be, assessment
+  const reasoning = [
+    fillTemplate(research.couldBeTemplate),
+    fillTemplate(research.couldNotBeTemplate),
+    fillTemplate(research.assessmentTemplate),
+  ].join("\n\n");
 
   return {
     reasoning,
