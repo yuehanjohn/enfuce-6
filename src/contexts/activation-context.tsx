@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 
 export type ActivationStage = "idle" | "server" | "layer1" | "layer2" | "active";
 
@@ -18,123 +18,106 @@ interface ActivationContextValue {
 
 const ActivationContext = createContext<ActivationContextValue | null>(null);
 
-// ── Browser-global singleton state ──────────────────────────────────
-// Survives React re-mounts (page navigations within the SPA).
-
-interface GlobalActivation {
-  stage: ActivationStage;
-  layer2Progress: Layer2Progress | null;
-  queueCount: number;
-  running: boolean;
-  listeners: Set<() => void>;
-}
-
-const SSR_DUMMY: GlobalActivation = {
-  stage: "idle",
-  layer2Progress: null,
-  queueCount: 0,
-  running: false,
-  listeners: new Set(),
-};
-
-function getGlobal(): GlobalActivation {
-  if (typeof window === "undefined") return SSR_DUMMY;
-  const w = window as unknown as { __activation?: GlobalActivation };
-  if (!w.__activation) {
-    w.__activation = {
-      stage: "idle",
-      layer2Progress: null,
-      queueCount: 0,
-      running: false,
-      listeners: new Set(),
-    };
-  }
-  return w.__activation;
-}
-
-function notify() {
-  const g = getGlobal();
-  for (const fn of g.listeners) fn();
-}
-
-function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
-async function runActivation() {
-  const g = getGlobal();
-  if (g.running || g.stage !== "idle") return;
-  g.running = true;
-
-  try {
-    g.stage = "server";
-    notify();
-    await sleep(1200);
-
-    g.stage = "layer1";
-    notify();
-    const l1Res = await fetch("/api/screening/run", { method: "POST" });
-    const l1Data = await l1Res.json();
-    const flags: { flag_id: string }[] = l1Data.flags ?? [];
-
-    g.stage = "layer2";
-    g.layer2Progress = { done: 0, total: flags.length };
-    notify();
-
-    let qCount = 0;
-    for (let i = 0; i < flags.length; i++) {
-      const res = await fetch("/api/screening/layer2-process-one", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ flag_id: flags[i].flag_id }),
-      });
-      const data = await res.json();
-      g.layer2Progress = { done: i + 1, total: flags.length };
-      if (data.routing === "HUMAN_REVIEW") {
-        qCount = data.queue_count ?? qCount + 1;
-        g.queueCount = qCount;
-      }
-      notify();
-    }
-
-    g.stage = "active";
-    g.layer2Progress = null;
-    notify();
-  } catch (err) {
-    console.error("Activation failed:", err);
-    g.stage = "idle";
-    g.layer2Progress = null;
-    notify();
-  } finally {
-    g.running = false;
-  }
-}
-
-// ── React provider — thin wrapper over global state ─────────────────
+// ── All processing runs server-side. Client only polls for status. ──
 
 export function ActivationProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState(() => {
-    const g = getGlobal();
-    return { stage: g.stage, layer2Progress: g.layer2Progress, queueCount: g.queueCount };
-  });
+  const [stage, setStage] = useState<ActivationStage>("idle");
+  const [layer2Progress, setLayer2Progress] = useState<Layer2Progress | null>(null);
+  const [queueCount, setQueueCount] = useState(0);
+  const pollingRef = useRef(false);
 
+  // Poll server for activation status
   useEffect(() => {
-    const g = getGlobal();
-    const listener = () =>
-      setState({ stage: g.stage, layer2Progress: g.layer2Progress, queueCount: g.queueCount });
-    g.listeners.add(listener);
-    // Sync immediately in case state already advanced while unmounted
-    listener();
-    return () => {
-      g.listeners.delete(listener);
-    };
+    let timer: ReturnType<typeof setInterval>;
+
+    async function poll() {
+      try {
+        const res = await fetch("/api/screening/activate");
+        if (!res.ok) return;
+        const data = await res.json();
+
+        setStage(data.stage);
+        setQueueCount(data.queueCount);
+
+        if (data.stage === "layer2") {
+          setLayer2Progress({ done: data.layer2Done, total: data.layer2Total });
+        } else {
+          setLayer2Progress(null);
+        }
+
+        // Stop polling once active or idle
+        if (data.stage === "active" || data.stage === "idle") {
+          pollingRef.current = false;
+          clearInterval(timer);
+        }
+      } catch {
+        // ignore fetch errors
+      }
+    }
+
+    // On mount, do one immediate poll to sync state
+    poll().then(() => {
+      // If running, keep polling
+      if (!pollingRef.current) {
+        // Check if we need to start polling based on fetched stage
+        // (the state may not be updated yet, so re-fetch)
+        fetch("/api/screening/activate")
+          .then((r) => r.json())
+          .then((data) => {
+            if (data.stage !== "idle" && data.stage !== "active") {
+              pollingRef.current = true;
+              timer = setInterval(poll, 1500);
+            }
+          })
+          .catch(() => {});
+      }
+    });
+
+    return () => clearInterval(timer);
   }, []);
 
-  const activate = useCallback(() => {
-    runActivation();
-  }, []);
+  const activate = useCallback(async () => {
+    if (stage !== "idle") return;
 
-  return <ActivationContext value={{ ...state, activate }}>{children}</ActivationContext>;
+    try {
+      const res = await fetch("/api/screening/activate", { method: "POST" });
+      if (!res.ok) return;
+
+      // Start polling
+      pollingRef.current = true;
+      const timer = setInterval(async () => {
+        try {
+          const r = await fetch("/api/screening/activate");
+          if (!r.ok) return;
+          const data = await r.json();
+
+          setStage(data.stage);
+          setQueueCount(data.queueCount);
+
+          if (data.stage === "layer2") {
+            setLayer2Progress({ done: data.layer2Done, total: data.layer2Total });
+          } else {
+            setLayer2Progress(null);
+          }
+
+          if (data.stage === "active" || data.stage === "idle") {
+            pollingRef.current = false;
+            clearInterval(timer);
+          }
+        } catch {
+          // ignore
+        }
+      }, 1500);
+    } catch (err) {
+      console.error("Activation failed:", err);
+    }
+  }, [stage]);
+
+  return (
+    <ActivationContext value={{ stage, layer2Progress, queueCount, activate }}>
+      {children}
+    </ActivationContext>
+  );
 }
 
 export function useActivation() {
