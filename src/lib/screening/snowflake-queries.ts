@@ -17,6 +17,29 @@ export function hasSnowflakeConnection(): boolean {
   return isSnowflakeConfigured();
 }
 
+let layer2CombinedScoreColumnCache: boolean | null = null;
+
+async function hasLayer2CombinedScoreColumn(): Promise<boolean> {
+  if (layer2CombinedScoreColumnCache !== null) {
+    return layer2CombinedScoreColumnCache;
+  }
+
+  try {
+    const result = await executeQuery<{ cnt: string }>(`
+      SELECT COUNT(*) AS cnt
+      FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = 'SCREENING'
+        AND TABLE_NAME = 'LAYER2_RESULTS'
+        AND COLUMN_NAME = 'COMBINED_SCORE'
+    `);
+    layer2CombinedScoreColumnCache = Number(result.rows[0]?.cnt ?? 0) > 0;
+  } catch {
+    layer2CombinedScoreColumnCache = false;
+  }
+
+  return layer2CombinedScoreColumnCache;
+}
+
 // ── Customers ───────────────────────────────────────────────────────
 
 export async function fetchCustomers(): Promise<Customer[]> {
@@ -162,21 +185,83 @@ export async function runLayer1Screening(): Promise<{ flagCount: number; custome
   // Run the screening query (same structure as seed/003_run_layer1.sql)
   await executeStatement(`
     INSERT INTO SCREENING.LAYER1_FLAGS (flag_id, customer_id, entity_id, composite_score, name_score, dob_score, nationality_score)
-  WITH base AS (
-        SELECT
+  WITH customers_norm AS (
+    SELECT
       c.customer_id,
       c.full_name,
       c.dob AS customer_dob,
       c.nationality,
+      UPPER(REGEXP_REPLACE(TRIM(c.full_name), '[^A-Z0-9 ]', '')) AS customer_name_norm,
+      UPPER(SPLIT_PART(TRIM(c.full_name), ' ', -1)) AS customer_last_name,
+      YEAR(c.dob) AS customer_dob_year
+    FROM CUSTOMERS.ONBOARDING c
+  ),
+  watchlist_norm AS (
+    SELECT
       w.entity_id,
       w.entity_name,
       w.entity_aliases,
       w.dob AS watchlist_dob,
       w.nationality_country,
       w.citizenship_country,
-      SCREENING.JARO_WINKLER_SIMILARITY(c.full_name, w.entity_name) AS name_sim
-    FROM CUSTOMERS.ONBOARDING c
-    CROSS JOIN WATCHLIST.SANCTIONS_PEP w
+      UPPER(REGEXP_REPLACE(TRIM(w.entity_name), '[^A-Z0-9 ]', '')) AS entity_name_norm,
+      UPPER(SPLIT_PART(TRIM(w.entity_name), ' ', -1)) AS entity_last_name,
+      YEAR(w.dob) AS watchlist_dob_year
+    FROM WATCHLIST.SANCTIONS_PEP w
+  ),
+  candidate_pairs AS (
+    SELECT
+      c.customer_id,
+      c.full_name,
+      c.customer_dob,
+      c.nationality,
+      w.entity_id,
+      w.entity_name,
+      w.entity_aliases,
+      w.watchlist_dob,
+      w.nationality_country,
+      w.citizenship_country
+    FROM customers_norm c
+    JOIN watchlist_norm w
+      ON (
+        -- Fast block #1: same first character after normalization.
+        LEFT(c.customer_name_norm, 1) = LEFT(w.entity_name_norm, 1)
+        -- Fast block #2: similar DOB year when both dates exist.
+        AND (
+          c.customer_dob IS NULL
+          OR w.watchlist_dob IS NULL
+          OR ABS(c.customer_dob_year - w.watchlist_dob_year) <= 2
+        )
+        -- Fast block #3: nationality/citizenship alignment when available.
+        AND (
+          c.nationality IS NULL
+          OR COALESCE(w.nationality_country, w.citizenship_country) IS NULL
+          OR UPPER(c.nationality) = UPPER(COALESCE(w.nationality_country, w.citizenship_country))
+        )
+      )
+      OR (
+        -- Recall guard: keep same-last-name pairs even if one of the other blocks misses.
+        c.customer_last_name IS NOT NULL
+        AND w.entity_last_name IS NOT NULL
+        AND c.customer_last_name <> ''
+        AND w.entity_last_name <> ''
+        AND c.customer_last_name = w.entity_last_name
+      )
+  ),
+  base AS (
+        SELECT
+      cp.customer_id,
+      cp.full_name,
+      cp.customer_dob,
+      cp.nationality,
+      cp.entity_id,
+      cp.entity_name,
+      cp.entity_aliases,
+      cp.watchlist_dob,
+      cp.nationality_country,
+      cp.citizenship_country,
+      SCREENING.JARO_WINKLER_SIMILARITY(cp.full_name, cp.entity_name) AS name_sim
+    FROM candidate_pairs cp
   ),
   alias_scores AS (
     SELECT
@@ -230,14 +315,27 @@ export async function runLayer1Screening(): Promise<{ flagCount: number; custome
 // ── Layer 2 Results ─────────────────────────────────────────────────
 
 export async function fetchLayer2Results(): Promise<Layer2Result[]> {
-  const result = await executeQuery<Record<string, unknown>>(`
+  const hasCombinedScore = await hasLayer2CombinedScoreColumn();
+  const result = await executeQuery<Record<string, unknown>>(
+    hasCombinedScore
+      ? `
     SELECT result_id, flag_id, customer_id, entity_id, ai_confidence, combined_score, routing,
            reasoning, matching_signals, conflicting_signals, sources,
            customer_background, sanctions_background,
            TO_CHAR(processed_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS processed_at
     FROM SCREENING.LAYER2_RESULTS
     ORDER BY combined_score DESC
-  `);
+  `
+      : `
+    SELECT result_id, flag_id, customer_id, entity_id, ai_confidence,
+           ai_confidence AS combined_score, routing,
+           reasoning, matching_signals, conflicting_signals, sources,
+           '' AS customer_background, '' AS sanctions_background,
+           TO_CHAR(processed_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS processed_at
+    FROM SCREENING.LAYER2_RESULTS
+    ORDER BY ai_confidence DESC
+  `
+  );
   return result.rows.map((r) => ({
     result_id: String(r.result_id),
     flag_id: String(r.flag_id),
@@ -257,14 +355,27 @@ export async function fetchLayer2Results(): Promise<Layer2Result[]> {
 }
 
 export async function fetchLayer2ByResultId(id: string): Promise<Layer2Result | null> {
-  const result = await executeQuery<Record<string, unknown>>(`
+  const hasCombinedScore = await hasLayer2CombinedScoreColumn();
+  const result = await executeQuery<Record<string, unknown>>(
+    hasCombinedScore
+      ? `
     SELECT result_id, flag_id, customer_id, entity_id, ai_confidence, combined_score, routing,
            reasoning, matching_signals, conflicting_signals, sources,
            customer_background, sanctions_background,
            TO_CHAR(processed_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS processed_at
     FROM SCREENING.LAYER2_RESULTS
     WHERE result_id = '${id.replace(/'/g, "''")}'
-  `);
+  `
+      : `
+    SELECT result_id, flag_id, customer_id, entity_id, ai_confidence,
+           ai_confidence AS combined_score, routing,
+           reasoning, matching_signals, conflicting_signals, sources,
+           '' AS customer_background, '' AS sanctions_background,
+           TO_CHAR(processed_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS processed_at
+    FROM SCREENING.LAYER2_RESULTS
+    WHERE result_id = '${id.replace(/'/g, "''")}'
+  `
+  );
   if (result.rows.length === 0) return null;
   const r = result.rows[0];
   return {
@@ -294,25 +405,100 @@ import type { Layer2Input } from "./layer2";
  * Returns an array ready to pass to processBatch().
  */
 export async function buildLayer2Inputs(flags: Layer1Flag[]): Promise<Layer2Input[]> {
+  if (flags.length === 0) return [];
+
+  const escapedFlagIds = flags.map((f) => `'${f.flag_id.replace(/'/g, "''")}'`).join(",");
+  const byId = new Map(flags.map((f) => [f.flag_id, f]));
+
+  const rows = await executeQuery<Record<string, unknown>>(`
+    SELECT
+      f.flag_id,
+      c.customer_id,
+      c.full_name,
+      TO_CHAR(c.dob, 'YYYY-MM-DD') AS customer_dob,
+      c.nationality,
+      c.email,
+      c.entity_type,
+      TO_CHAR(c.created_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS customer_created_at,
+      w.entity_id,
+      w.sr_no,
+      w.listing_country,
+      w.authority,
+      w.list_name,
+      w.entity_type AS watchlist_entity_type,
+      w.entity_name,
+      w.entity_aliases,
+      TO_CHAR(w.effective_date, 'YYYY-MM-DD') AS effective_date,
+      TO_CHAR(w.expiry_date, 'YYYY-MM-DD') AS expiry_date,
+      w.entity_notes,
+      w.citation_link,
+      w.address,
+      w.country,
+      w.nationality_country,
+      w.citizenship_country,
+      TO_CHAR(w.dob, 'YYYY-MM-DD') AS watchlist_dob,
+      w.pob,
+      w.call_sign,
+      w.vessel_type,
+      w.vessel_flag,
+      w.vessel_owner,
+      w.gross_tonnage,
+      w.gross_registered_tonnage
+    FROM SCREENING.LAYER1_FLAGS f
+    JOIN CUSTOMERS.ONBOARDING c ON c.customer_id = f.customer_id
+    JOIN WATCHLIST.SANCTIONS_PEP w ON w.entity_id = f.entity_id
+    WHERE f.flag_id IN (${escapedFlagIds})
+    ORDER BY f.composite_score DESC
+  `);
+
   const inputs: Layer2Input[] = [];
-  // Fetch in parallel batches of 10 to avoid overwhelming the SQL API
-  const BATCH = 10;
-  for (let i = 0; i < flags.length; i += BATCH) {
-    const slice = flags.slice(i, i + BATCH);
-    const resolved = await Promise.all(
-      slice.map(async (flag) => {
-        const [customer, sanctions] = await Promise.all([
-          fetchCustomerById(flag.customer_id),
-          fetchSanctionsEntryById(flag.entity_id),
-        ]);
-        if (!customer || !sanctions) return null;
-        return { customer, sanctions, flag } satisfies Layer2Input;
-      })
-    );
-    for (const r of resolved) {
-      if (r) inputs.push(r);
-    }
+  for (const r of rows.rows) {
+    const flagId = String(r.flag_id ?? "");
+    const flag = byId.get(flagId);
+    if (!flag) continue;
+
+    const customer: Customer = {
+      customer_id: String(r.customer_id ?? ""),
+      full_name: String(r.full_name ?? ""),
+      dob: String(r.customer_dob ?? ""),
+      nationality: String(r.nationality ?? ""),
+      email: String(r.email ?? ""),
+      entity_type: String(r.entity_type ?? "INDIVIDUAL") as Customer["entity_type"],
+      created_at: String(r.customer_created_at ?? ""),
+    };
+
+    const sanctions: SanctionsEntry = {
+      entity_id: String(r.entity_id ?? ""),
+      sr_no: Number(r.sr_no ?? 0),
+      listing_country: String(r.listing_country ?? ""),
+      authority: String(r.authority ?? ""),
+      list_name: String(r.list_name ?? ""),
+      entity_type: String(r.watchlist_entity_type ?? ""),
+      entity_name: String(r.entity_name ?? ""),
+      entity_aliases: String(r.entity_aliases ?? ""),
+      effective_date: String(r.effective_date ?? ""),
+      expiry_date: r.expiry_date ? String(r.expiry_date) : null,
+      entity_notes: String(r.entity_notes ?? ""),
+      citation_link: String(r.citation_link ?? ""),
+      address: String(r.address ?? ""),
+      country: String(r.country ?? ""),
+      nationality_country: String(r.nationality_country ?? ""),
+      citizenship_country: String(r.citizenship_country ?? ""),
+      dob: String(r.watchlist_dob ?? ""),
+      pob: String(r.pob ?? ""),
+      call_sign: r.call_sign ? String(r.call_sign) : null,
+      vessel_type: r.vessel_type ? String(r.vessel_type) : null,
+      vessel_flag: r.vessel_flag ? String(r.vessel_flag) : null,
+      vessel_owner: r.vessel_owner ? String(r.vessel_owner) : null,
+      gross_tonnage: r.gross_tonnage ? String(r.gross_tonnage) : null,
+      gross_registered_tonnage: r.gross_registered_tonnage
+        ? Number(r.gross_registered_tonnage)
+        : null,
+    };
+
+    inputs.push({ customer, sanctions, flag });
   }
+
   return inputs;
 }
 
@@ -326,12 +512,19 @@ export async function buildLayer2Inputs(flags: Layer1Flag[]): Promise<Layer2Inpu
  * - For AUTO_CLEAR: inserts into DECISIONS.CLEARANCES + AUDIT.LOG
  * - For HUMAN_REVIEW: inserts into QUEUE.PENDING_REVIEW + AUDIT.LOG
  */
-export async function saveLayer2Results(results: Layer2Result[]): Promise<void> {
+export async function saveLayer2Results(
+  results: Layer2Result[],
+  options?: { clearExisting?: boolean }
+): Promise<void> {
   const esc = (s: string) => String(s ?? "").replace(/'/g, "''");
+  const hasCombinedScore = await hasLayer2CombinedScoreColumn();
+  const clearExisting = options?.clearExisting ?? true;
 
-  // Clean previous run
-  await executeStatement(`TRUNCATE TABLE SCREENING.LAYER2_RESULTS`);
-  await executeStatement(`DELETE FROM QUEUE.PENDING_REVIEW WHERE status = 'PENDING'`);
+  // Clean previous run only when requested (first batch in incremental mode).
+  if (clearExisting) {
+    await executeStatement(`TRUNCATE TABLE SCREENING.LAYER2_RESULTS`);
+    await executeStatement(`DELETE FROM QUEUE.PENDING_REVIEW WHERE status = 'PENDING'`);
+  }
 
   for (const r of results) {
     const matchingJson = JSON.stringify(r.matching_signals ?? []).replace(/'/g, "''");
@@ -339,26 +532,70 @@ export async function saveLayer2Results(results: Layer2Result[]): Promise<void> 
     const sourcesJson = JSON.stringify(r.sources ?? []).replace(/'/g, "''");
 
     // Insert result
-    await executeStatement(`
-      INSERT INTO SCREENING.LAYER2_RESULTS
-        (result_id, flag_id, customer_id, entity_id, ai_confidence, combined_score,
-         routing, reasoning, matching_signals, conflicting_signals, sources,
-         customer_background, sanctions_background)
-      VALUES (
-        '${esc(r.result_id)}', '${esc(r.flag_id)}', '${esc(r.customer_id)}', '${esc(r.entity_id)}',
-        ${r.ai_confidence}, ${r.combined_score},
-        '${esc(r.routing)}', '${esc(r.reasoning)}',
-        PARSE_JSON('${matchingJson}'), PARSE_JSON('${conflictingJson}'), PARSE_JSON('${sourcesJson}'),
-        '${esc(r.customer_background)}', '${esc(r.sanctions_background)}'
-      )
-    `);
+    try {
+      if (hasCombinedScore) {
+        await executeStatement(`
+          INSERT INTO SCREENING.LAYER2_RESULTS
+            (result_id, flag_id, customer_id, entity_id, ai_confidence, combined_score,
+             routing, reasoning, matching_signals, conflicting_signals, sources,
+             customer_background, sanctions_background)
+          VALUES (
+            '${esc(r.result_id)}', '${esc(r.flag_id)}', '${esc(r.customer_id)}', '${esc(r.entity_id)}',
+            ${r.ai_confidence}, ${r.combined_score},
+            '${esc(r.routing)}', '${esc(r.reasoning)}',
+            PARSE_JSON('${matchingJson}'), PARSE_JSON('${conflictingJson}'), PARSE_JSON('${sourcesJson}'),
+            '${esc(r.customer_background)}', '${esc(r.sanctions_background)}'
+          )
+        `);
+      } else {
+        await executeStatement(`
+          INSERT INTO SCREENING.LAYER2_RESULTS
+            (result_id, flag_id, customer_id, entity_id, ai_confidence,
+             routing, reasoning, matching_signals, conflicting_signals, sources)
+          VALUES (
+            '${esc(r.result_id)}', '${esc(r.flag_id)}', '${esc(r.customer_id)}', '${esc(r.entity_id)}',
+            ${r.ai_confidence},
+            '${esc(r.routing)}', '${esc(r.reasoning)}',
+            PARSE_JSON('${matchingJson}'), PARSE_JSON('${conflictingJson}'), PARSE_JSON('${sourcesJson}')
+          )
+        `);
+      }
+    } catch (error) {
+      const message = String(error);
+      if (!message.includes("PARSE_JSON") || !message.includes("VALUES clause")) {
+        throw error;
+      }
 
-    const auditPayload = JSON.stringify({
-      result_id: r.result_id,
-      ai_confidence: r.ai_confidence,
-      combined_score: r.combined_score,
-      routing: r.routing,
-    }).replace(/'/g, "''");
+      // Some Snowflake environments reject PARSE_JSON() in INSERT ... VALUES.
+      // Fallback to NULL for JSON columns so the run still completes.
+      if (hasCombinedScore) {
+        await executeStatement(`
+          INSERT INTO SCREENING.LAYER2_RESULTS
+            (result_id, flag_id, customer_id, entity_id, ai_confidence, combined_score,
+             routing, reasoning, matching_signals, conflicting_signals, sources,
+             customer_background, sanctions_background)
+          VALUES (
+            '${esc(r.result_id)}', '${esc(r.flag_id)}', '${esc(r.customer_id)}', '${esc(r.entity_id)}',
+            ${r.ai_confidence}, ${r.combined_score},
+            '${esc(r.routing)}', '${esc(r.reasoning)}',
+            NULL, NULL, NULL,
+            '${esc(r.customer_background)}', '${esc(r.sanctions_background)}'
+          )
+        `);
+      } else {
+        await executeStatement(`
+          INSERT INTO SCREENING.LAYER2_RESULTS
+            (result_id, flag_id, customer_id, entity_id, ai_confidence,
+             routing, reasoning, matching_signals, conflicting_signals, sources)
+          VALUES (
+            '${esc(r.result_id)}', '${esc(r.flag_id)}', '${esc(r.customer_id)}', '${esc(r.entity_id)}',
+            ${r.ai_confidence},
+            '${esc(r.routing)}', '${esc(r.reasoning)}',
+            NULL, NULL, NULL
+          )
+        `);
+      }
+    }
 
     if (r.routing === "AUTO_RESTRICT") {
       const decisionId = `DEC-AUTO-R-${r.customer_id}-${Date.now()}`;
@@ -374,7 +611,7 @@ export async function saveLayer2Results(results: Layer2Result[]): Promise<void> 
         INSERT INTO AUDIT.LOG (log_id, customer_id, layer, event_type, payload)
         VALUES (
           'AUDIT-L2-AR-${Date.now()}-${esc(r.customer_id)}',
-          '${esc(r.customer_id)}', 2, 'AUTO_RESTRICTED', PARSE_JSON('${auditPayload}')
+          '${esc(r.customer_id)}', 2, 'AUTO_RESTRICTED', NULL
         )
       `);
     } else if (r.routing === "AUTO_CLEAR") {
@@ -391,7 +628,7 @@ export async function saveLayer2Results(results: Layer2Result[]): Promise<void> 
         INSERT INTO AUDIT.LOG (log_id, customer_id, layer, event_type, payload)
         VALUES (
           'AUDIT-L2-AC-${Date.now()}-${esc(r.customer_id)}',
-          '${esc(r.customer_id)}', 2, 'AUTO_CLEARED', PARSE_JSON('${auditPayload}')
+          '${esc(r.customer_id)}', 2, 'AUTO_CLEARED', NULL
         )
       `);
     } else {
@@ -409,7 +646,7 @@ export async function saveLayer2Results(results: Layer2Result[]): Promise<void> 
         INSERT INTO AUDIT.LOG (log_id, customer_id, layer, event_type, payload)
         VALUES (
           'AUDIT-L2-HR-${Date.now()}-${esc(r.customer_id)}',
-          '${esc(r.customer_id)}', 2, 'QUEUED_FOR_REVIEW', PARSE_JSON('${auditPayload}')
+          '${esc(r.customer_id)}', 2, 'QUEUED_FOR_REVIEW', NULL
         )
       `);
     }

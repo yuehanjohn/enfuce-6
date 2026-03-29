@@ -10,15 +10,16 @@ import {
   fetchLayer2Results as sfFetchResults,
 } from "@/lib/screening/snowflake-queries";
 import { processBatch } from "@/lib/screening/layer2";
+import { buildFastPassResult, evaluateFastPass } from "@/lib/screening/policy";
 import { MOCK_LAYER2_RESULTS, auditLog } from "@/lib/screening/data";
 import { SCREENING_CONFIG } from "@/lib/screening/config";
 
 function log(step: string, data?: unknown) {
   const ts = new Date().toISOString();
   if (data !== undefined) {
-    console.log(`[Layer2 API] ${ts} | ${step}`, data);
+    console.warn(`[Layer2 API] ${ts} | ${step}`, data);
   } else {
-    console.log(`[Layer2 API] ${ts} | ${step}`);
+    console.warn(`[Layer2 API] ${ts} | ${step}`);
   }
 }
 
@@ -29,6 +30,18 @@ export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
     const useMock = typeof body.mock === "boolean" ? body.mock : !hasSnowflakeConnection();
+    const requestedMaxCases = Number(body.maxCases);
+    const maxCases = Number.isFinite(requestedMaxCases)
+      ? Math.max(1, Math.min(500, Math.floor(requestedMaxCases)))
+      : SCREENING_CONFIG.layer2.maxCasesPerRun;
+    const batchMode = body.batchMode === true;
+    const requestedBatchSize = Number(body.batchSize);
+    const batchSize = Number.isFinite(requestedBatchSize)
+      ? Math.max(1, Math.min(100, Math.floor(requestedBatchSize)))
+      : 10;
+    const requestedOffset = Number(body.offset);
+    const offset = Number.isFinite(requestedOffset) ? Math.max(0, Math.floor(requestedOffset)) : 0;
+    const reset = typeof body.reset === "boolean" ? body.reset : offset === 0;
 
     log("Config", {
       useMock,
@@ -37,6 +50,11 @@ export async function POST(request: Request) {
         model: SCREENING_CONFIG.layer2.model,
         concurrency: SCREENING_CONFIG.layer2.concurrency,
         searchMaxResults: SCREENING_CONFIG.layer2.searchMaxResults,
+        maxCases,
+        batchMode,
+        batchSize,
+        offset,
+        reset,
         autoRestrictThreshold: SCREENING_CONFIG.routing.autoRestrictThreshold,
         autoClearThreshold: SCREENING_CONFIG.routing.autoClearThreshold,
         layer1Weight: SCREENING_CONFIG.scoring.layer1Weight,
@@ -72,13 +90,49 @@ export async function POST(request: Request) {
         });
       }
 
+      const cappedFlags = flags.slice(0, maxCases);
+      if (cappedFlags.length < flags.length) {
+        log("Layer 2 cap applied", {
+          totalFlags: flags.length,
+          selectedForRun: cappedFlags.length,
+          skipped: flags.length - cappedFlags.length,
+        });
+      }
+
+      const batchStart = Math.min(offset, cappedFlags.length);
+      const batchEnd = batchMode
+        ? Math.min(batchStart + batchSize, cappedFlags.length)
+        : cappedFlags.length;
+      const selectedFlags = cappedFlags.slice(batchStart, batchEnd);
+
+      if (selectedFlags.length === 0) {
+        const summary = await runLayer2Processing();
+        const allResults = await sfFetchResults();
+        return NextResponse.json({
+          success: true,
+          results: allResults,
+          summary,
+          selected_flags: cappedFlags.length,
+          total_flags: flags.length,
+          batch_mode: batchMode,
+          processed_total: batchStart,
+          processed_in_batch: 0,
+          remaining: Math.max(0, cappedFlags.length - batchStart),
+          has_more: false,
+          next_offset: batchStart,
+          source: "snowflake",
+        });
+      }
+
       // 2. Resolve customer + sanctions records for each flag
-      log(`Step 2 — buildLayer2Inputs START (${flags.length} flags)`);
+      log(
+        `Step 2 — buildLayer2Inputs START (${selectedFlags.length} flags, batch ${batchStart}-${batchEnd - 1})`
+      );
       const t2 = Date.now();
-      const inputs = await buildLayer2Inputs(flags);
+      const inputs = await buildLayer2Inputs(selectedFlags);
       log(`Step 2 — buildLayer2Inputs DONE (${Date.now() - t2}ms)`, {
         resolved: inputs.length,
-        skipped: flags.length - inputs.length,
+        skipped: selectedFlags.length - inputs.length,
         cases: inputs.map((i) => ({
           flag_id: i.flag.flag_id,
           customer: i.customer.full_name,
@@ -87,14 +141,25 @@ export async function POST(request: Request) {
         })),
       });
 
-      // 3. Run AI processing: 2× Brave Search + Cortex COMPLETE per case
+      // 3. Run fast-pass policy first; only ambiguous cases go through deep AI pass.
       log(
-        `Step 3 — processBatch START (${inputs.length} cases, concurrency=${SCREENING_CONFIG.layer2.concurrency})`
+        `Step 3 — fast/deep routing START (${inputs.length} cases, concurrency=${SCREENING_CONFIG.layer2.concurrency})`
       );
       const t3 = Date.now();
-      const results = await processBatch(inputs);
-      log(`Step 3 — processBatch DONE (${Date.now() - t3}ms)`, {
+      const fastResults = inputs
+        .map((input) => {
+          const decision = evaluateFastPass(input.flag);
+          return decision ? buildFastPassResult(input.flag, decision) : null;
+        })
+        .filter((r): r is NonNullable<typeof r> => r !== null);
+      const deepInputs = inputs.filter((input) => evaluateFastPass(input.flag) === null);
+      const deepResults = deepInputs.length > 0 ? await processBatch(deepInputs) : [];
+      const results = [...fastResults, ...deepResults];
+
+      log(`Step 3 — fast/deep routing DONE (${Date.now() - t3}ms)`, {
         processed: results.length,
+        fast_pass: fastResults.length,
+        deep_pass: deepResults.length,
         routing: {
           AUTO_RESTRICT: results.filter((r) => r.routing === "AUTO_RESTRICT").length,
           AUTO_CLEAR: results.filter((r) => r.routing === "AUTO_CLEAR").length,
@@ -112,13 +177,16 @@ export async function POST(request: Request) {
       // 4. Persist results + handle auto routing
       log("Step 4 — saveLayer2Results START");
       const t4 = Date.now();
-      await saveLayer2Results(results);
+      await saveLayer2Results(results, {
+        clearExisting: batchMode ? reset : true,
+      });
       log(`Step 4 — saveLayer2Results DONE (${Date.now() - t4}ms)`);
 
       // 5. Read back authoritative summary
       log("Step 5 — runLayer2Processing (summary query)");
       const summary = await runLayer2Processing();
-      const allResults = await sfFetchResults();
+      const hasMore = batchEnd < cappedFlags.length;
+      const allResults = hasMore ? results : await sfFetchResults();
 
       const totalMs = Date.now() - requestStart;
       log(`POST DONE (${totalMs}ms)`, { summary });
@@ -127,6 +195,14 @@ export async function POST(request: Request) {
         success: true,
         results: allResults,
         summary,
+        selected_flags: cappedFlags.length,
+        total_flags: flags.length,
+        batch_mode: batchMode,
+        processed_total: batchEnd,
+        processed_in_batch: selectedFlags.length,
+        remaining: Math.max(0, cappedFlags.length - batchEnd),
+        has_more: hasMore,
+        next_offset: batchEnd,
         source: "snowflake",
       });
     }

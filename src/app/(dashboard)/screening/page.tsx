@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { Button, Card } from "@heroui/react";
-import { ConfidenceMeter } from "@/components/screening/ConfidenceMeter";
-import type { Layer1Flag, Layer2Result } from "@/types/screening";
+import type { Layer1Flag } from "@/types/screening";
 
 type Stage = "idle" | "layer1" | "layer1_done" | "layer2" | "layer2_done";
 
@@ -14,52 +13,18 @@ interface Layer2Summary {
   human_review: number;
 }
 
-interface ProgressStats {
-  total_flags: number;
-  processed: number;
-  remaining: number;
-  auto_restrict: number;
-  auto_clear: number;
-  human_review: number;
-  source: string;
-}
-
 export default function ScreeningPage() {
   const [stage, setStage] = useState<Stage>("idle");
   const [layer1Flags, setLayer1Flags] = useState<Layer1Flag[]>([]);
-  const [layer2Results, setLayer2Results] = useState<Layer2Result[]>([]);
   const [layer2Summary, setLayer2Summary] = useState<Layer2Summary | null>(null);
   const [customersScreened, setCustomersScreened] = useState(0);
-  const [progress, setProgress] = useState<ProgressStats | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Poll /api/screening/progress every 2s while Layer 2 is running
-  useEffect(() => {
-    if (stage === "layer2") {
-      pollRef.current = setInterval(async () => {
-        try {
-          const res = await fetch("/api/screening/progress");
-          if (res.ok) {
-            const data = await res.json();
-            setProgress(data as ProgressStats);
-          }
-        } catch {
-          // ignore transient poll errors
-        }
-      }, 2000);
-    } else {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-    }
-    return () => {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-    };
-  }, [stage]);
+  const [layer2Progress, setLayer2Progress] = useState<{ processed: number; total: number } | null>(
+    null
+  );
+  const [layer2ModeCounts, setLayer2ModeCounts] = useState<{ fast: number; deep: number }>({
+    fast: 0,
+    deep: 0,
+  });
 
   async function runLayer1() {
     setStage("layer1");
@@ -76,26 +41,105 @@ export default function ScreeningPage() {
 
   async function runLayer2() {
     setStage("layer2");
-    setProgress(null);
+    setLayer2Summary(null);
+    setLayer2ModeCounts({ fast: 0, deep: 0 });
+    setLayer2Progress({ processed: 0, total: layer1Flags.length });
+
     try {
-      const res = await fetch("/api/screening/layer2", {
+      const maxCases = 300;
+      let sessionId = "";
+      let finalSummary: Layer2Summary | null = null;
+
+      const firstClaimRes = await fetch("/api/screening/workers/claim-next", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mock: false }),
+        body: JSON.stringify({ reset: true, maxCases }),
       });
-      const data = await res.json();
-      setLayer2Results(data.results);
-      setLayer2Summary(data.summary);
+      if (!firstClaimRes.ok) {
+        throw new Error(`Failed to initialize worker session (${firstClaimRes.status})`);
+      }
+
+      let claimData = (await firstClaimRes.json()) as {
+        sessionId: string;
+        claim: { index: number } | null;
+      };
+      sessionId = claimData.sessionId;
+
+      while (claimData.claim) {
+        const processRes = await fetch("/api/screening/workers/process-one", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId,
+            claimIndex: claimData.claim.index,
+          }),
+        });
+
+        if (!processRes.ok) {
+          throw new Error(`Failed processing case (${processRes.status})`);
+        }
+
+        const processData = (await processRes.json()) as {
+          success: boolean;
+          mode?: "fast" | "deep";
+        };
+
+        if (processData.success && (processData.mode === "fast" || processData.mode === "deep")) {
+          setLayer2ModeCounts((prev) => ({
+            ...prev,
+            [processData.mode!]: prev[processData.mode!] + 1,
+          }));
+        }
+
+        const statusRes = await fetch(
+          `/api/screening/workers/status?sessionId=${encodeURIComponent(sessionId)}`
+        );
+        if (!statusRes.ok) {
+          throw new Error(`Failed fetching worker status (${statusRes.status})`);
+        }
+
+        const statusData = (await statusRes.json()) as {
+          progress: { processed: number; total: number; hasMore: boolean };
+          summary: Layer2Summary;
+        };
+
+        setLayer2Progress({
+          processed: statusData.progress.processed,
+          total: statusData.progress.total,
+        });
+        setLayer2Summary(statusData.summary);
+        finalSummary = statusData.summary;
+
+        if (!statusData.progress.hasMore) {
+          break;
+        }
+
+        const nextClaimRes = await fetch("/api/screening/workers/claim-next", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId }),
+        });
+        if (!nextClaimRes.ok) {
+          throw new Error(`Failed to claim next case (${nextClaimRes.status})`);
+        }
+
+        claimData = (await nextClaimRes.json()) as {
+          sessionId: string;
+          claim: { index: number } | null;
+        };
+      }
+
       setStage("layer2_done");
+      setLayer2Progress(null);
+
+      if ((finalSummary?.human_review ?? 0) > 0) {
+        window.location.href = "/queue";
+      }
     } catch {
       setStage("layer1_done");
+      setLayer2Progress(null);
     }
   }
-
-  const progressPct =
-    progress && progress.total_flags > 0
-      ? Math.round((progress.processed / progress.total_flags) * 100)
-      : 0;
 
   return (
     <div className="space-y-6">
@@ -104,9 +148,7 @@ export default function ScreeningPage() {
         <p className="text-default-500">Three-layer screening pipeline for customer onboarding</p>
       </div>
 
-      {/* Pipeline Visualization */}
       <div className="grid gap-4 md:grid-cols-3">
-        {/* Layer 1 */}
         <Card className={stage === "layer1" ? "border-2 border-primary" : ""}>
           <Card.Header>
             <div className="flex w-full items-center gap-2">
@@ -158,7 +200,6 @@ export default function ScreeningPage() {
           </Card.Content>
         </Card>
 
-        {/* Layer 2 */}
         <Card className={stage === "layer2" ? "border-2 border-primary" : ""}>
           <Card.Header>
             <div className="flex w-full items-center gap-2">
@@ -189,60 +230,34 @@ export default function ScreeningPage() {
             )}
 
             {stage === "layer2" && (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <Button variant="primary" className="w-full" isDisabled>
-                  Processing {layer1Flags.length} cases...
+                  Processing {layer2Progress?.processed ?? 0}/
+                  {layer2Progress?.total ?? layer1Flags.length} cases...
                 </Button>
-
-                {/* Live progress panel */}
-                {progress ? (
-                  <div className="space-y-2">
-                    {/* Progress bar */}
-                    <div className="flex items-center justify-between text-xs text-default-500 mb-1">
-                      <span>
-                        {progress.processed} / {progress.total_flags} processed
-                      </span>
-                      <span>{progressPct}%</span>
-                    </div>
-                    <div className="h-2 w-full rounded-full bg-default-100 overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-primary transition-all duration-500"
-                        style={{ width: `${progressPct}%` }}
-                      />
-                    </div>
-
-                    {/* Live counters */}
-                    <div className="grid grid-cols-3 gap-2 text-center text-xs mt-2">
-                      <div className="rounded-lg bg-danger-50 p-2">
-                        <p className="text-base font-bold text-danger">{progress.auto_restrict}</p>
-                        <p className="text-default-500">Auto-Restrict</p>
-                      </div>
-                      <div className="rounded-lg bg-success-50 p-2">
-                        <p className="text-base font-bold text-success">{progress.auto_clear}</p>
-                        <p className="text-default-500">Auto-Clear</p>
-                      </div>
-                      <div className="rounded-lg bg-warning-50 p-2">
-                        <p className="text-base font-bold text-warning">{progress.human_review}</p>
-                        <p className="text-default-500">Human Review</p>
-                      </div>
-                    </div>
-
-                    <div className="text-center text-xs text-default-400">
-                      {progress.remaining > 0 ? `${progress.remaining} remaining` : "Finalising..."}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-xs text-default-400 text-center animate-pulse">
-                    Waiting for first batch...
-                  </div>
-                )}
+                <p className="text-xs text-default-500 text-center">
+                  Cases are processed one-by-one. HUMAN_REVIEW cases are sent directly to the Review
+                  Queue.
+                </p>
+                <p className="text-xs text-default-500 text-center">
+                  Fast pass: {layer2ModeCounts.fast} | Deep pass: {layer2ModeCounts.deep}
+                </p>
               </div>
+            )}
+
+            {stage === "layer2_done" && (
+              <p className="text-xs text-default-500 text-center">
+                Fast pass: {layer2ModeCounts.fast} | Deep pass: {layer2ModeCounts.deep}
+              </p>
             )}
 
             {stage === "layer2_done" && layer2Summary && (
               <div className="space-y-2">
                 <div className="rounded-lg bg-success-50 p-3 text-sm">
                   <p className="font-medium text-success">AI Processing Complete</p>
+                  <p className="text-default-600">
+                    Review-required cases were routed automatically to the Review Queue.
+                  </p>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-center text-sm">
                   <div className="rounded-lg bg-danger-50 p-2">
@@ -269,7 +284,6 @@ export default function ScreeningPage() {
           </Card.Content>
         </Card>
 
-        {/* Layer 3 */}
         <Card>
           <Card.Header>
             <div className="flex w-full items-center gap-2">
@@ -296,10 +310,10 @@ export default function ScreeningPage() {
                   Open Review Queue ({layer2Summary.human_review} cases)
                 </Button>
               </a>
-            ) : stage === "layer2" && progress && progress.human_review > 0 ? (
+            ) : stage === "layer2" && (layer2Summary?.human_review ?? 0) > 0 ? (
               <a href="/queue">
                 <Button variant="primary" className="w-full bg-warning text-warning-foreground">
-                  View Queue ({progress.human_review} so far)
+                  View Queue ({layer2Summary?.human_review ?? 0} so far)
                 </Button>
               </a>
             ) : (
@@ -311,48 +325,12 @@ export default function ScreeningPage() {
         </Card>
       </div>
 
-      {/* Layer 2 Results Table */}
-      {stage === "layer2_done" && layer2Results.length > 0 && (
+      {(stage === "layer2" || stage === "layer2_done") && (
         <Card>
-          <Card.Header>
-            <Card.Title>Layer 2 Results</Card.Title>
-          </Card.Header>
           <Card.Content>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-default-200 text-left">
-                    <th className="pb-3 font-medium text-default-500">Customer</th>
-                    <th className="pb-3 font-medium text-default-500">Watchlist Match</th>
-                    <th className="pb-3 font-medium text-default-500">AI Confidence</th>
-                    <th className="pb-3 font-medium text-default-500">Routing</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {layer2Results.map((r) => (
-                    <tr key={r.result_id} className="border-b border-default-100">
-                      <td className="py-3 font-medium">{r.customer_id}</td>
-                      <td className="py-3">{r.entity_id}</td>
-                      <td className="py-3 w-48">
-                        <ConfidenceMeter confidence={r.ai_confidence} size="sm" />
-                      </td>
-                      <td className="py-3">
-                        <span
-                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                            r.routing === "AUTO_RESTRICT"
-                              ? "bg-danger-50 text-danger"
-                              : r.routing === "AUTO_CLEAR"
-                                ? "bg-success-50 text-success"
-                                : "bg-warning-50 text-warning"
-                          }`}
-                        >
-                          {r.routing.replace("_", " ")}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="rounded-lg bg-default-50 p-4 text-sm text-default-600">
+              Individual case outputs are not displayed on this page. Analysts should use the Review
+              Queue for manual decisions.
             </div>
           </Card.Content>
         </Card>
