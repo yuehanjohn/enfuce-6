@@ -21,5 +21,11 @@ export async function GET() {
       };
     });
 
-  return NextResponse.json({ queue: enrichedQueue, count: enrichedQueue.length, source: "mock" });
+  return NextResponse.json({
+    queue: enrichedQueue,
+    count: enrichedQueue.length,
+    stage: runtime.stage,
+    totalDecided: runtime.decisions.length,
+    source: "mock",
+  });
 }

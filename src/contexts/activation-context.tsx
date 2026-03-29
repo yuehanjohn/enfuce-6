@@ -45,8 +45,9 @@ export function ActivationProvider({ children }: { children: React.ReactNode }) 
           setLayer2Progress(null);
         }
 
-        // Stop polling once active or idle
-        if (data.stage === "active" || data.stage === "idle") {
+        // Stop polling only when idle (not yet activated)
+        // Keep polling when active so queueCount stays fresh after decisions
+        if (data.stage === "idle") {
           pollingRef.current = false;
           clearInterval(timer);
         }
@@ -57,16 +58,16 @@ export function ActivationProvider({ children }: { children: React.ReactNode }) 
 
     // On mount, do one immediate poll to sync state
     poll().then(() => {
-      // If running, keep polling
+      // If running or active, keep polling
       if (!pollingRef.current) {
-        // Check if we need to start polling based on fetched stage
-        // (the state may not be updated yet, so re-fetch)
         fetch("/api/screening/activate")
           .then((r) => r.json())
           .then((data) => {
-            if (data.stage !== "idle" && data.stage !== "active") {
+            if (data.stage !== "idle") {
               pollingRef.current = true;
-              timer = setInterval(poll, 1500);
+              // Poll faster during pipeline, slower when active
+              const interval = data.stage === "active" ? 5000 : 1500;
+              timer = setInterval(poll, interval);
             }
           })
           .catch(() => {});
@@ -100,7 +101,8 @@ export function ActivationProvider({ children }: { children: React.ReactNode }) 
             setLayer2Progress(null);
           }
 
-          if (data.stage === "active" || data.stage === "idle") {
+          // Stop only when idle; keep polling when active for fresh queueCount
+          if (data.stage === "idle") {
             pollingRef.current = false;
             clearInterval(timer);
           }

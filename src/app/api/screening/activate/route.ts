@@ -111,11 +111,13 @@ export async function POST() {
 }
 
 export async function GET() {
+  const pendingCount = runtime.reviewQueue.filter((q) => q.status === "PENDING").length;
+
   return NextResponse.json({
     stage: runtime.stage,
     layer2Done: runtime.layer2Done,
     layer2Total: runtime.layer2Total,
-    queueCount: runtime.reviewQueue.length,
+    queueCount: pendingCount,
     flagsCount: runtime.layer1Flags.length,
   });
 }

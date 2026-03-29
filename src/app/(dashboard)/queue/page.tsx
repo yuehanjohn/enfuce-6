@@ -25,6 +25,8 @@ export default function QueuePage() {
   const [queue, setQueue] = useState<QueueEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [pipelineStage, setPipelineStage] = useState<string>("idle");
+  const [totalDecided, setTotalDecided] = useState(0);
   const initialLoadDone = useRef(false);
 
   const loadQueue = useCallback(async (showLoading = false) => {
@@ -41,6 +43,8 @@ export default function QueuePage() {
       }
       const data = await response.json();
       setQueue(Array.isArray(data.queue) ? data.queue : []);
+      if (data.stage) setPipelineStage(data.stage);
+      if (typeof data.totalDecided === "number") setTotalDecided(data.totalDecided);
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") {
         if (!initialLoadDone.current) setError("Queue request timed out. Please retry.");
@@ -97,23 +101,80 @@ export default function QueuePage() {
         <Card>
           <Card.Content>
             <div className="flex flex-col items-center justify-center py-12 text-center">
-              <svg
-                className="h-12 w-12 text-default-300 mb-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={1}
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
-                />
-              </svg>
-              <p className="text-lg font-medium">Queue is empty</p>
-              <p className="text-sm text-default-500 mt-1">
-                Click the <strong>Activate</strong> button on the sidebar to activate the server.
-              </p>
+              {pipelineStage === "idle" ? (
+                <>
+                  <svg
+                    className="h-12 w-12 text-default-300 mb-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={1}
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+                    />
+                  </svg>
+                  <p className="text-lg font-medium">Queue is empty</p>
+                  <p className="text-sm text-default-500 mt-1">
+                    Click the <strong>Activate</strong> button on the sidebar to activate the
+                    server.
+                  </p>
+                </>
+              ) : pipelineStage === "server" ||
+                pipelineStage === "layer1" ||
+                pipelineStage === "layer2" ? (
+                <>
+                  <div className="h-12 w-12 mb-4 rounded-full border-4 border-primary/30 border-t-primary animate-spin" />
+                  <p className="text-lg font-medium">Processing cases</p>
+                  <p className="text-sm text-default-500 mt-1">
+                    The screening pipeline is still running. New cases will appear here
+                    automatically.
+                  </p>
+                </>
+              ) : totalDecided > 0 ? (
+                <>
+                  <svg
+                    className="h-12 w-12 text-success mb-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={1}
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+                    />
+                  </svg>
+                  <p className="text-lg font-medium">All cases reviewed</p>
+                  <p className="text-sm text-default-500 mt-1">
+                    All {totalDecided} queued {totalDecided === 1 ? "case has" : "cases have"} been
+                    decided. No pending reviews remaining.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <svg
+                    className="h-12 w-12 text-default-300 mb-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={1}
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+                    />
+                  </svg>
+                  <p className="text-lg font-medium">No cases for review</p>
+                  <p className="text-sm text-default-500 mt-1">
+                    All flagged cases were automatically resolved. No human review needed.
+                  </p>
+                </>
+              )}
             </div>
           </Card.Content>
         </Card>
