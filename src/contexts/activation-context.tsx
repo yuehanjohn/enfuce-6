@@ -113,10 +113,9 @@ async function runActivation() {
 // ── React provider — thin wrapper over global state ─────────────────
 
 export function ActivationProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState({
-    stage: "idle" as ActivationStage,
-    layer2Progress: null as Layer2Progress | null,
-    queueCount: 0,
+  const [state, setState] = useState(() => {
+    const g = getGlobal();
+    return { stage: g.stage, layer2Progress: g.layer2Progress, queueCount: g.queueCount };
   });
 
   useEffect(() => {

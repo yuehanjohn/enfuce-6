@@ -77,30 +77,33 @@ export function getMockSystemStatus(): SystemStatusResponse {
           3,
           "degraded",
           {
-            title: "Latency spike",
+            title: "Snowflake pool reconnect",
             duration: "2 min",
             when: "18h ago",
-            detail: "Query fan-out briefly exceeded normal thresholds.",
+            detail:
+              "Session pool dropped and reconnected during scheduled Snowflake maintenance window.",
           },
         ],
         [
           12,
           "incident",
           {
-            title: "Temporary outage",
+            title: "Watchlist sync failure",
             duration: "6 min",
             when: "9h ago",
-            detail: "Data ingestion restarted after a failed worker deploy.",
+            detail:
+              "OFAC SDN list refresh timed out. Screening ran against stale data until retry succeeded.",
           },
         ],
         [
           14,
           "degraded",
           {
-            title: "Service degraded",
+            title: "Slow deterministic scan",
             duration: "4 min",
             when: "7h ago",
-            detail: "Backfill jobs increased processing delay for warehouse sync.",
+            detail:
+              "10k customer batch scan took 3.2s (SLO: 500ms) due to concurrent warehouse load.",
           },
         ],
       ]),
@@ -114,10 +117,11 @@ export function getMockSystemStatus(): SystemStatusResponse {
           12,
           "incident",
           {
-            title: "Temporary outage",
+            title: "Cortex inference timeout",
             duration: "5 min",
             when: "9h ago",
-            detail: "Model inference recovered automatically after regional failover.",
+            detail:
+              "CORTEX.COMPLETE calls timed out during peak load. Deep-path cases queued until recovery.",
           },
         ],
       ]),
@@ -131,10 +135,11 @@ export function getMockSystemStatus(): SystemStatusResponse {
           12,
           "incident",
           {
-            title: "Search errors",
+            title: "Brave Search rate limit",
             duration: "5 min",
             when: "9h ago",
-            detail: "Search index retries spiked before the service stabilized.",
+            detail:
+              "Background search hit rate limit (100 req/min). Queued lookups resumed after cooldown.",
           },
         ],
       ]),

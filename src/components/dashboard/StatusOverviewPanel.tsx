@@ -26,7 +26,7 @@ function IconClock({ className }: { className?: string }) {
 }
 
 export function StatusOverviewPanel() {
-  const [metrics, setMetrics] = useState<StatusMetrics>({ restrict: 12, clear: 142, review: 8 });
+  const [metrics, setMetrics] = useState<StatusMetrics>({ restrict: 3, clear: 9814, review: 6 });
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -43,10 +43,10 @@ export function StatusOverviewPanel() {
 
   const rows = useMemo(
     () => [
-      { label: "TOTAL CUSTOMERS", value: total, valueClass: "text-neutral-900" },
-      { label: "AUTO-RESTRICT", value: metrics.restrict, valueClass: "text-red-600" },
-      { label: "AUTO-CLEAR", value: metrics.clear, valueClass: "text-emerald-600" },
-      { label: "HUMAN REVIEW", value: metrics.review, valueClass: "text-amber-600" },
+      { label: "SCREENED (L1)", value: total, valueClass: "text-neutral-900" },
+      { label: "AUTO-RESTRICT (L2)", value: metrics.restrict, valueClass: "text-red-600" },
+      { label: "AUTO-CLEAR (L2)", value: metrics.clear, valueClass: "text-emerald-600" },
+      { label: "HUMAN REVIEW (L3)", value: metrics.review, valueClass: "text-amber-600" },
     ],
     [metrics, total]
   );

@@ -116,16 +116,27 @@ export function auditEntriesToActivityItems(entries: AuditEntry[]): ActivityLine
 }
 
 const SIM_MESSAGES: { text: string; tone: ActivityTone }[] = [
-  { text: "Health check: API routes responding.", tone: "muted" },
-  { text: "Polling screening queue for pending cases…", tone: "muted" },
-  { text: "Snowflake session pool warm — no reconnect.", tone: "muted" },
-  { text: "Cortex inference gateway latency within SLO.", tone: "muted" },
-  { text: "Brave Search connector: rate limit nominal.", tone: "muted" },
-  { text: "Audit writer: batch flush OK.", tone: "success" },
-  { text: "Watching POST /api/screening/* for new jobs…", tone: "muted" },
-  { text: "Layer 2 worker idle — awaiting Layer 1 flags.", tone: "muted" },
-  { text: "Encrypted credentials rotation not due — skipped.", tone: "muted" },
-  { text: "Metrics: screening throughput nominal (demo mode).", tone: "muted" },
+  { text: "L1 Data Warehouse: Snowflake session pool warm — 10k customers cached.", tone: "muted" },
+  {
+    text: "L1 Data Warehouse: watchlist sync complete — OFAC, UN, EU lists current.",
+    tone: "muted",
+  },
+  { text: "L2 AI: Cortex inference gateway latency 42ms — within SLO.", tone: "muted" },
+  { text: "L2 AI: worker claiming next flagged case from queue…", tone: "muted" },
+  { text: "L3 Search: Brave Search connector rate limit nominal (18/100 req/min).", tone: "muted" },
+  { text: "L3 Search: background context retrieval via CORTEX.COMPLETE OK.", tone: "success" },
+  { text: "Audit writer: batch flush — 12 entries persisted.", tone: "success" },
+  { text: "Health check: /api/screening/health — all layers responding.", tone: "muted" },
+  { text: "Database: Supabase connection pool 3/20 active — idle.", tone: "muted" },
+  {
+    text: "L2 AI: fast-path routing for low-score flags (<30%) — avg 0.8s per case.",
+    tone: "muted",
+  },
+  {
+    text: "L2 AI: deep-path routing for high-score flags (>70%) — avg 10s per case.",
+    tone: "muted",
+  },
+  { text: "L1 Data Warehouse: deterministic match scan completed in 480ms.", tone: "muted" },
 ];
 
 export function simulatedActivityLine(seq: number): ActivityLine {

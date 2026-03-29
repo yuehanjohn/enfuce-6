@@ -8,39 +8,43 @@ import { useState } from "react";
 
 const recentActivity = [
   {
+    name: "Viktor Petrov",
+    status: "Auto-Restrict",
+    score: "94%",
+    time: "10:31 AM",
+    detail: "L1 exact match on OFAC SDN list. L2 AI confirmed — name, DOB, nationality all match.",
+  },
+  {
+    name: "Ahmad Al-Hassan",
+    status: "Human Review",
+    score: "58%",
+    time: "10:18 AM",
+    detail:
+      "L1 flagged against UN sanctions. L2 AI inconclusive — name match but DOB off by 2 years.",
+  },
+  {
     name: "John Smith",
     status: "Auto-Cleared",
     score: "12%",
     time: "10:14 AM",
-    detail: "No DOB or nationality match, likely false positive.",
-  },
-  {
-    name: "Ahmad Al-Hassan",
-    status: "Escalated",
-    score: "58%",
-    time: "10:18 AM",
-    detail: "Name and nationality match, DOB discrepancy.",
-  },
-  {
-    name: "Viktor Petrov",
-    status: "High Risk",
-    score: "89%",
-    time: "10:31 AM",
-    detail: "Exact match across name, DOB, and nationality.",
+    detail:
+      "L1 fuzzy match on common name. L2 AI cleared — no supporting signals from Brave Search.",
   },
   {
     name: "Fatima Nour",
-    status: "Escalated",
+    status: "Human Review",
     score: "44%",
     time: "09:52 AM",
-    detail: "Partial name match, insufficient supporting evidence.",
+    detail:
+      "L1 partial name match on EU sanctions list. L2 AI queued for review — insufficient data.",
   },
   {
     name: "Li Wei",
     status: "Auto-Cleared",
     score: "8%",
     time: "09:40 AM",
-    detail: "Common name, no supporting match signals.",
+    detail:
+      "L1 phonetic match only. L2 AI cleared — high-frequency name, zero corroborating evidence.",
   },
 ];
 
@@ -135,7 +139,7 @@ export function DashboardShell() {
                         className={
                           row.status === "Auto-Cleared"
                             ? "text-emerald-600"
-                            : row.status === "High Risk"
+                            : row.status === "Auto-Restrict"
                               ? "text-red-600"
                               : "text-amber-600"
                         }
