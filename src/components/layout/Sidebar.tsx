@@ -88,6 +88,23 @@ function IconAuditLog({ className }: { className?: string }) {
   );
 }
 
+function IconReset({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M1 4v6h6" />
+      <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+    </svg>
+  );
+}
+
 /** Double chevron (Figma / Lucide-style ChevronsLeft) — collapse sidebar */
 function IconChevronsLeft({ className }: { className?: string }) {
   return (
@@ -189,7 +206,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
-  const { stage, layer2Progress, queueCount, activate } = useActivation();
+  const { stage, layer2Progress, queueCount, activate, reset } = useActivation();
 
   const handleSignOut = useCallback(async () => {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -314,6 +331,23 @@ export function Sidebar() {
           );
         })}
       </nav>
+
+      {/* Reset Button — only visible when not idle */}
+      {stage !== "idle" && (
+        <div className={`shrink-0 px-2 pb-2 ${collapsed ? "flex justify-center" : ""}`}>
+          <button
+            type="button"
+            onClick={reset}
+            title={collapsed ? "Reset server" : undefined}
+            className={`flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-neutral-600 transition-colors hover:bg-neutral-300/50 hover:text-neutral-900 ${
+              collapsed ? "justify-center px-2" : ""
+            }`}
+          >
+            <IconReset className="size-4.5 shrink-0" />
+            {!collapsed && <span>Reset server</span>}
+          </button>
+        </div>
+      )}
 
       <div className={`shrink-0 p-3 pt-2 ${collapsed ? "flex justify-center" : ""}`}>
         <Dropdown>

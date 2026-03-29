@@ -14,6 +14,7 @@ interface ActivationContextValue {
   layer2Progress: Layer2Progress | null;
   queueCount: number;
   activate: () => void;
+  reset: () => void;
 }
 
 const ActivationContext = createContext<ActivationContextValue | null>(null);
@@ -77,6 +78,30 @@ export function ActivationProvider({ children }: { children: React.ReactNode }) 
     return () => clearInterval(timer);
   }, []);
 
+  // Auto-reset server every 20 minutes while active
+  const resetTimerRef = useRef<ReturnType<typeof setInterval>>(undefined);
+  useEffect(() => {
+    if (stage === "active") {
+      resetTimerRef.current = setInterval(
+        async () => {
+          try {
+            await fetch("/api/screening/activate", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ reset: true }),
+            });
+          } catch {
+            // ignore
+          }
+        },
+        20 * 60 * 1000
+      );
+    } else {
+      clearInterval(resetTimerRef.current);
+    }
+    return () => clearInterval(resetTimerRef.current);
+  }, [stage]);
+
   const activate = useCallback(async () => {
     if (stage !== "idle") return;
 
@@ -115,8 +140,28 @@ export function ActivationProvider({ children }: { children: React.ReactNode }) 
     }
   }, [stage]);
 
+  const reset = useCallback(async () => {
+    if (stage === "idle") return;
+    try {
+      const res = await fetch("/api/screening/activate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reset: true }),
+      });
+      if (!res.ok) return;
+
+      // Go straight back to idle
+      pollingRef.current = false;
+      setStage("idle");
+      setQueueCount(0);
+      setLayer2Progress(null);
+    } catch (err) {
+      console.error("Reset failed:", err);
+    }
+  }, [stage]);
+
   return (
-    <ActivationContext value={{ stage, layer2Progress, queueCount, activate }}>
+    <ActivationContext value={{ stage, layer2Progress, queueCount, activate, reset }}>
       {children}
     </ActivationContext>
   );

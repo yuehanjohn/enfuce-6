@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import {
   runtime,
+  resetRuntime,
   getCustomers,
   MOCK_SANCTIONS,
   findCustomer,
@@ -99,7 +100,15 @@ async function runPipeline() {
   }
 }
 
-export async function POST() {
+export async function POST(request: Request) {
+  const body = await request.json().catch(() => ({}));
+
+  // Reset to idle — turn off the server completely
+  if (body.reset) {
+    resetRuntime();
+    return NextResponse.json({ success: true, message: "Pipeline reset to idle" });
+  }
+
   if (runtime.stage !== "idle") {
     return NextResponse.json({ error: "Already running", stage: runtime.stage }, { status: 409 });
   }
