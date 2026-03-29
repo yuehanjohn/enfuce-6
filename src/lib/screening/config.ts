@@ -9,12 +9,14 @@ export const SCREENING_CONFIG = {
     model: "claude-3-5-sonnet" as string,
     // Lower temperature = more deterministic compliance reasoning
     temperature: 0.3,
-    // Tokens for reasoning + JSON output
-    maxTokens: 3500,
-    // Parallel Cortex calls per batch
-    concurrency: 5,
-    // Max Brave Search results per query (two queries run per case)
-    searchMaxResults: 5,
+    // Keep token budget conservative for production latency/cost.
+    maxTokens: 1200,
+    // Parallel Cortex calls per batch.
+    concurrency: 4,
+    // Max Brave Search results per query (two queries run per case).
+    searchMaxResults: 2,
+    // Hard cap per Layer 2 run to keep API latency predictable.
+    maxCasesPerRun: 30,
   },
 
   // ── Routing thresholds (applied to COMBINED score) ───────────────────
