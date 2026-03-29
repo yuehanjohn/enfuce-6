@@ -1,5 +1,6 @@
 // POST /api/screening/run — Trigger Layer 1 deterministic screening
 // Screens 10,000 customers against sanctions watchlist in ~500ms
+export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { runLayer1Screening } from "@/lib/screening/layer1";
 import { getCustomers, MOCK_SANCTIONS, runtime } from "@/lib/screening/data";

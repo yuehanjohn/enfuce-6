@@ -1,4 +1,5 @@
 // GET /api/screening/audit — Return audit log entries
+export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { runtime } from "@/lib/screening/data";
 

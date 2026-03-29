@@ -28,7 +28,7 @@ export function middleware(request: NextRequest) {
 
   if (isLoggedIn && (path === "/login" || path === "/signup")) {
     const url = request.nextUrl.clone();
-    url.pathname = "/screening";
+    url.pathname = "/dashboard";
     return NextResponse.redirect(url);
   }
 

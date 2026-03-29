@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState } from "react";
 import { Card, Button } from "@heroui/react";
-import Link from "next/link";
 
 interface AuditEntry {
   log_id: string;
@@ -60,11 +59,6 @@ export default function AuditPage() {
             Immutable record of all screening decisions and actions
           </p>
         </div>
-        <Link href="/screening">
-          <Button variant="outline" size="sm">
-            Back to Pipeline
-          </Button>
-        </Link>
       </div>
 
       {loading ? (

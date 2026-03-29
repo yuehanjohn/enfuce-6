@@ -62,7 +62,11 @@ function parseAliases(aliases: string): string[] {
     .filter(Boolean);
 }
 
-function scoreName(customerName: string, entityName: string, aliases: string): { nameScore: number; namePoints: number; aliasPoints: number } {
+function scoreName(
+  customerName: string,
+  entityName: string,
+  aliases: string
+): { nameScore: number; namePoints: number; aliasPoints: number } {
   const cn = customerName.toLowerCase();
   const en = entityName.toLowerCase();
   const nameScore = jaroWinkler(cn, en);
@@ -106,22 +110,22 @@ function scoreNationality(customerNat: string, entityNat: string): number {
 
 export function screenCustomerAgainstEntry(
   customer: Customer,
-  entry: SanctionsEntry,
+  entry: SanctionsEntry
 ): Layer1Flag | null {
   const { nameScore, namePoints, aliasPoints } = scoreName(
     customer.full_name,
     entry.entity_name,
-    entry.entity_aliases,
+    entry.entity_aliases
   );
   const dobScore = scoreDob(customer.dob, entry.dob);
   const nationalityScore = scoreNationality(
     customer.nationality,
-    entry.nationality_country || entry.citizenship_country || entry.country,
+    entry.nationality_country || entry.citizenship_country || entry.country
   );
 
   const compositeScore = Math.max(namePoints, 0) + aliasPoints + dobScore + nationalityScore;
 
-  if (compositeScore < 50) return null;
+  if (compositeScore < 85) return null;
 
   return {
     flag_id: `FLAG-${customer.customer_id}-${entry.entity_id}`,
@@ -137,7 +141,7 @@ export function screenCustomerAgainstEntry(
 
 export function runLayer1Screening(
   customers: Customer[],
-  sanctions: SanctionsEntry[],
+  sanctions: SanctionsEntry[]
 ): Layer1Flag[] {
   const flags: Layer1Flag[] = [];
   for (const customer of customers) {

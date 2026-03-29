@@ -1,4 +1,5 @@
 // GET /api/screening/queue — Return pending review queue (live, grows during Layer 2)
+export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { runtime, findCustomer, findSanctionsEntry, findLayer2Result } from "@/lib/screening/data";
 

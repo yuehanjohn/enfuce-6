@@ -1,5 +1,6 @@
 // POST /api/screening/layer2 — Return Layer 2 results summary
 // GET  /api/screening/layer2 — Return stored Layer 2 results
+export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { runtime } from "@/lib/screening/data";
 

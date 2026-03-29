@@ -74,14 +74,7 @@ export default function QueuePage() {
             Cases requiring human analyst review (10–90% AI confidence)
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-default-500">{queue.length} pending</span>
-          <Link href="/screening">
-            <Button variant="outline" size="sm">
-              Back to Pipeline
-            </Button>
-          </Link>
-        </div>
+        <span className="text-sm text-default-500">{queue.length} pending</span>
       </div>
 
       {loading ? (
@@ -119,13 +112,8 @@ export default function QueuePage() {
               </svg>
               <p className="text-lg font-medium">Queue is empty</p>
               <p className="text-sm text-default-500 mt-1">
-                All cases have been reviewed or no screening has been run yet.
+                Click the <strong>Activate</strong> button on the sidebar to activate the server.
               </p>
-              <Link href="/screening">
-                <Button variant="primary" className="mt-4">
-                  Run Screening
-                </Button>
-              </Link>
             </div>
           </Card.Content>
         </Card>

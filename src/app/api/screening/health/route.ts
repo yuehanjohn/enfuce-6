@@ -1,4 +1,5 @@
 // GET /api/screening/health — System health check (mock mode)
+export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 
 export async function GET() {

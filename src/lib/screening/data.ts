@@ -311,7 +311,8 @@ function seededRandom(seed: number): () => number {
 
 // ── Customer generator (10,000 customers) ───────────────────────────
 
-let _customers: Customer[] | null = null;
+const gc = globalThis as unknown as { __screeningCustomers?: Customer[] | null };
+if (gc.__screeningCustomers === undefined) gc.__screeningCustomers = null;
 
 function generateCustomers(): Customer[] {
   const customers: Customer[] = [];
@@ -356,8 +357,8 @@ function generateCustomers(): Customer[] {
 }
 
 export function getCustomers(): Customer[] {
-  if (!_customers) _customers = generateCustomers();
-  return _customers;
+  if (!gc.__screeningCustomers) gc.__screeningCustomers = generateCustomers();
+  return gc.__screeningCustomers;
 }
 
 // ── Sanctions / Watchlist (static) ──────────────────────────────────
@@ -379,8 +380,8 @@ export const MOCK_SANCTIONS: SanctionsEntry[] = [
     citation_link: "https://ofac.treasury.gov/recent-actions/20230115",
     address: "Beirut, Lebanon",
     country: "LB",
-    nationality_country: "LB",
-    citizenship_country: "LB",
+    nationality_country: "LEBANON",
+    citizenship_country: "LEBANON",
     dob: "1976-05-20",
     pob: "Tripoli, Lebanon",
     call_sign: null,
@@ -406,8 +407,8 @@ export const MOCK_SANCTIONS: SanctionsEntry[] = [
     citation_link: "https://ofac.treasury.gov/recent-actions/20220610",
     address: "Moscow, Russia",
     country: "RU",
-    nationality_country: "RU",
-    citizenship_country: "RU",
+    nationality_country: "RUSSIA",
+    citizenship_country: "RUSSIA",
     dob: "1965-11-22",
     pob: "Saint Petersburg, Russia",
     call_sign: null,
@@ -432,8 +433,8 @@ export const MOCK_SANCTIONS: SanctionsEntry[] = [
     citation_link: "https://www.un.org/securitycouncil/sanctions/list",
     address: "London, United Kingdom",
     country: "GB",
-    nationality_country: "GB",
-    citizenship_country: "GB",
+    nationality_country: "UNITED KINGDOM",
+    citizenship_country: "UNITED KINGDOM",
     dob: "1970-02-14",
     pob: "London, UK",
     call_sign: null,
@@ -459,8 +460,8 @@ export const MOCK_SANCTIONS: SanctionsEntry[] = [
     citation_link: "https://ec.europa.eu/sanctions",
     address: "Mexico City, Mexico",
     country: "MX",
-    nationality_country: "MX",
-    citizenship_country: "MX",
+    nationality_country: "MEXICO",
+    citizenship_country: "MEXICO",
     dob: "1983-12-18",
     pob: "Guadalajara, Mexico",
     call_sign: null,
@@ -486,8 +487,8 @@ export const MOCK_SANCTIONS: SanctionsEntry[] = [
     citation_link: "https://ofac.treasury.gov/recent-actions/20240915",
     address: "Shenzhen, China",
     country: "CN",
-    nationality_country: "CN",
-    citizenship_country: "CN",
+    nationality_country: "CHINA",
+    citizenship_country: "CHINA",
     dob: "1972-01-28",
     pob: "Shanghai, China",
     call_sign: null,
@@ -500,15 +501,31 @@ export const MOCK_SANCTIONS: SanctionsEntry[] = [
 ];
 
 // ── Mutable runtime state ───────────────────────────────────────────
+// Use globalThis to persist state across Next.js dev-mode module re-evaluations.
+// Without this, each API route gets its own copy of `runtime` and state set by
+// one route (e.g. /run) is invisible to another (e.g. /layer2-process-one).
 
-export const runtime = {
-  layer1Flags: [] as Layer1Flag[],
-  layer2Results: [] as Layer2Result[],
-  reviewQueue: [] as QueueItem[],
-  decisions: [] as Decision[],
-  auditLog: [] as AuditEntry[],
-  activated: false,
-};
+interface RuntimeState {
+  layer1Flags: Layer1Flag[];
+  layer2Results: Layer2Result[];
+  reviewQueue: QueueItem[];
+  decisions: Decision[];
+  auditLog: AuditEntry[];
+  activated: boolean;
+}
+
+const g = globalThis as unknown as { __screeningRuntime?: RuntimeState };
+if (!g.__screeningRuntime) {
+  g.__screeningRuntime = {
+    layer1Flags: [],
+    layer2Results: [],
+    reviewQueue: [],
+    decisions: [],
+    auditLog: [],
+    activated: false,
+  };
+}
+export const runtime: RuntimeState = g.__screeningRuntime;
 
 export function resetRuntime() {
   runtime.layer1Flags = [];

@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { getSessionProgress, getWorkerSession } from "@/lib/screening/worker-state";
 import { runtime } from "@/lib/screening/data";

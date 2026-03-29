@@ -1,4 +1,5 @@
 // GET /api/screening/review?id=Q-001 — Get full review case by queue ID
+export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import type { ReviewCase } from "@/types/screening";
 import {

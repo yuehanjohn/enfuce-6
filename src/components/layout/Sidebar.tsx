@@ -4,7 +4,8 @@ import { Avatar, Dropdown } from "@heroui/react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
+import { useActivation, type ActivationStage } from "@/contexts/activation-context";
 
 type NavItem = {
   href: string;
@@ -12,8 +13,6 @@ type NavItem = {
   match: (pathname: string) => boolean;
   Icon: React.FC<{ className?: string }>;
 };
-
-type ActivationStage = "idle" | "server" | "layer1" | "layer2" | "active";
 
 function IconPower({ className }: { className?: string }) {
   return (
@@ -186,20 +185,11 @@ const STAGE_LABELS: Record<ActivationStage, string> = {
   active: "Active",
 };
 
-function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
-  const [stage, setStage] = useState<ActivationStage>("idle");
-  const [layer2Progress, setLayer2Progress] = useState<{ done: number; total: number } | null>(
-    null
-  );
-  const [queueCount, setQueueCount] = useState(0);
-  const activatingRef = useRef(false);
+  const { stage, layer2Progress, queueCount, activate } = useActivation();
 
   const handleSignOut = useCallback(async () => {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -211,52 +201,9 @@ export function Sidebar() {
     router.push("/settings/profile");
   }, [router]);
 
-  const handleActivate = useCallback(async () => {
-    if (activatingRef.current || stage !== "idle") return;
-    activatingRef.current = true;
-
-    try {
-      // Stage 1: Server activation (~1s)
-      setStage("server");
-      await sleep(1200);
-
-      // Stage 2: Layer 1 — screen 10,000 customers (~500ms)
-      setStage("layer1");
-      const l1Res = await fetch("/api/screening/run", { method: "POST" });
-      const l1Data = await l1Res.json();
-      const flags: { flag_id: string }[] = l1Data.flags ?? [];
-
-      // Stage 3: Layer 2 — process each flagged case one-by-one (~10s each)
-      // HUMAN_REVIEW cases are pushed to the queue as they complete
-      setStage("layer2");
-      setLayer2Progress({ done: 0, total: flags.length });
-      let qCount = 0;
-
-      for (let i = 0; i < flags.length; i++) {
-        const res = await fetch("/api/screening/layer2-process-one", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ flag_id: flags[i].flag_id }),
-        });
-        const data = await res.json();
-        setLayer2Progress({ done: i + 1, total: flags.length });
-
-        if (data.routing === "HUMAN_REVIEW") {
-          qCount = data.queue_count ?? qCount + 1;
-          setQueueCount(qCount);
-        }
-      }
-
-      setStage("active");
-      setLayer2Progress(null);
-    } catch (err) {
-      console.error("Activation failed:", err);
-      setStage("idle");
-      setLayer2Progress(null);
-    } finally {
-      activatingRef.current = false;
-    }
-  }, [stage]);
+  const handleActivate = useCallback(() => {
+    activate();
+  }, [activate]);
 
   // When active, navigate to queue on badge click
   const handleQueueClick = useCallback(() => {

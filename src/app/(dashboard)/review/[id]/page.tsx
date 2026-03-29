@@ -13,7 +13,6 @@ import type {
   Layer2Result,
   Source,
 } from "@/types/screening";
-import Link from "next/link";
 
 function SparklesIcon({ className }: { className?: string }) {
   return (
@@ -494,9 +493,6 @@ export default function ReviewPage() {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4">
         <p className="text-danger">{error || "Case not found"}</p>
-        <Link href="/queue">
-          <Button variant="outline">Back to Queue</Button>
-        </Link>
       </div>
     );
   }

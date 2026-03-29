@@ -3,6 +3,7 @@
 import { BackendActivityLogPanel } from "@/components/dashboard/BackendActivityLogPanel";
 import { LivePipelinePanel } from "@/components/dashboard/LivePipelinePanel";
 import { StatusOverviewPanel } from "@/components/dashboard/StatusOverviewPanel";
+import { useActivation } from "@/contexts/activation-context";
 import { useState } from "react";
 
 const recentActivity = [
@@ -60,8 +61,44 @@ function IconDatabase({ className }: { className?: string }) {
   );
 }
 
+function IconPower({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
+      <line x1="12" y1="2" x2="12" y2="12" />
+    </svg>
+  );
+}
+
 export function DashboardShell() {
   const [backendLogHidden, setBackendLogHidden] = useState(false);
+  const { stage } = useActivation();
+
+  if (stage === "idle") {
+    return (
+      <div className="-m-6 flex h-[calc(100%+3rem)] items-center justify-center bg-[#f9fafb]">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <div className="flex size-16 items-center justify-center rounded-2xl bg-neutral-100 text-neutral-400">
+            <IconPower className="size-8" />
+          </div>
+          <p className="text-lg font-semibold text-neutral-800">Screening pipeline inactive</p>
+          <p className="max-w-sm text-sm text-neutral-500">
+            Click the <span className="font-medium text-neutral-700">Activate</span> button in the
+            sidebar to start the sanctions screening pipeline. Logs, uptime, and metrics will appear
+            here once the system is running.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="-m-6 h-[calc(100%+3rem)] overflow-hidden bg-[#f9fafb] p-6">
