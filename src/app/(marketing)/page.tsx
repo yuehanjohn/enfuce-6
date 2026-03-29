@@ -16,69 +16,60 @@ const GREEN = "#16A34A"; // success / match
 // ─── Data ────────────────────────────────────────────────────────────────────
 const STATS = [
   { value: 100000, suffix: "+", label: "Customers screened per run" },
-  { value: 99.7, suffix: "%", label: "False-positive reduction" },
-  { value: 200, suffix: "ms", label: "Avg screening latency" },
-  { value: 47, suffix: "+", label: "Sanctions lists covered" },
+  { value: 3, suffix: "", label: "Screening layers" },
+  { value: 10, suffix: "%", label: "Auto-clear confidence threshold (≤)" },
+  { value: 90, suffix: "%", label: "High-risk escalation threshold (≥)" },
 ];
 
 const STEPS = [
   {
     n: "01",
-    title: "Ingest & Match",
-    body: "Customer records are pulled from your Supabase database and scored against live OFAC, UN, and EU sanctions feeds using Jaro-Winkler fuzzy matching and DOB/nationality similarity.",
+    title: "Deterministic Screening",
+    body: "Customers are matched against sanctions and PEP lists using SQL-based name similarity (Jaro-Winkler), date of birth comparison, and nationality alignment. This narrows 100k+ customers to a small set of high-signal flagged candidates.",
   },
   {
     n: "02",
-    title: "AI Triage",
-    body: "OpenRouter AI + Bright Data web search researches each flagged case autonomously. High-confidence matches are escalated immediately; clear false positives are cleared without analyst time.",
+    title: "AI Reasoning & Routing",
+    body: "Snowflake Cortex analyzes each flagged case with contextual reasoning and external data enrichment, generating a confidence score and structured rationale. Cases are auto-cleared (≤10%), sent for human review (10–90%), or escalated as high-risk (≥90%).",
   },
   {
     n: "03",
-    title: "Analyst Decision",
-    body: "Ambiguous cases surface in the review dashboard with field comparison, AI reasoning, confidence scoring, source citations, and an embedded chat assistant for deeper investigation.",
+    title: "Human Review",
+    body: "Analysts review only uncertain cases in a dedicated dashboard with full case context, AI-generated reasoning, source links, and an embedded AI chat assistant. Every action is captured in a complete, auditable decision trail.",
   },
 ];
 
 const FEATURES = [
   {
     icon: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4A6500" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>`,
-    title: "Fuzzy Name Matching",
-    body: "Jaro-Winkler similarity with configurable thresholds catches name variants, transliterations, and aliases that exact-match rules miss.",
+    title: "Confidence-Based Triage",
+    body: "Each flagged case is assigned a confidence score that drives automatic routing — cases auto-clear, escalate, or queue for human review, so analysts focus only on genuine uncertainty.",
   },
   {
     icon: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4A6500" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>`,
-    title: "AI-Powered Research",
-    body: "OpenRouter AI + Bright Data web search autonomously investigates each flag, delivering structured reasoning and cited evidence directly to analysts.",
+    title: "Explainable AI Reasoning",
+    body: "Snowflake Cortex generates structured case analysis with supporting signals for every decision — not just a score, but a traceable chain of reasoning analysts can interrogate.",
   },
   {
     icon: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4A6500" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>`,
-    title: "Analyst Dashboard",
-    body: "Side-by-side field comparison, AI confidence score, signal breakdown, and source links — everything needed to decide in a single, frictionless panel.",
-  },
-  {
-    icon: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4A6500" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
-    title: "Immutable Audit Trail",
-    body: "Every Layer 1 flag, AI reasoning chain, human decision, and chat transcript is logged immutably. Legally defensible records by design.",
-  },
-  {
-    icon: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4A6500" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4.03 3-9 3s-9-1.34-9-3M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/></svg>`,
-    title: "Supabase-Native",
-    body: "All data stays in your Supabase environment. Zero data egress, no third-party storage, full sovereignty over sensitive customer records.",
+    title: "Source-Backed Decisions",
+    body: "Every AI determination links back to the underlying sanctions or PEP dataset entry, giving analysts direct access to the evidence behind each flag.",
   },
   {
     icon: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4A6500" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
     title: "Human-in-the-Loop",
-    body: "AI handles high-confidence cases automatically. Edge cases always reach a human, maintaining the accountability regulators expect.",
+    body: "Uncertain cases always surface in the analyst queue. Reviewers have full case context, AI reasoning, source links, and an AI chat assistant — maintaining the human accountability regulators require.",
   },
-];
-
-const COMPLIANCE_PILLS = [
-  { label: "SOC 2 Type II", lime: false },
-  { label: "GDPR", lime: false },
-  { label: "FATF", lime: false },
-  { label: "Zero Data Retention", lime: false },
-  { label: "End-to-end Encrypted", lime: false },
-  { label: "Powered by Enfuce", lime: true },
+  {
+    icon: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4A6500" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
+    title: "Full Audit Trail",
+    body: "End-to-end audit logging captures every screening step, AI reasoning chain, and human decision — providing complete compliance transparency and legally defensible records.",
+  },
+  {
+    icon: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4A6500" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4.03 3-9 3s-9-1.34-9-3M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/></svg>`,
+    title: "Snowflake-Powered Scale",
+    body: "Snowflake serves as the core screening engine — handling 100k+ customer records, rule execution, Cortex AI reasoning, and case persistence with role-based access controls.",
+  },
 ];
 
 // ─── CSS ─────────────────────────────────────────────────────────────────────
@@ -263,12 +254,6 @@ const PAGE_CSS = `
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 20px;
-  }
-  .compliance-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    justify-content: center;
   }
   .hero-btns {
     display: flex;
@@ -496,7 +481,6 @@ export default function LandingPage() {
               ["How it Works", "#how-it-works"],
               ["Product", "#product"],
               ["Security", "#security"],
-              ["Compliance", "#compliance"],
             ].map(([label, href]) => (
               <a key={label} href={href} className="nav-link">
                 {label}
@@ -645,9 +629,9 @@ export default function LandingPage() {
               lineHeight: 1.72,
             }}
           >
-            AI-powered sanctions & PEP screening for financial institutions. Three-layer
-            intelligence pipeline — rules, AI, and human oversight — that reduces false positives by
-            99.7%.
+            AI-powered sanctions & PEP screening that reduces false positives, accelerates
+            onboarding, and enables explainable, human-in-the-loop decision-making. Three-layer
+            architecture — deterministic filtering, AI reasoning, and targeted human review.
           </p>{" "}
           {/* Buttons */}
           <div className="hero-btns hw" style={{ marginBottom: 60 }}>
@@ -834,8 +818,9 @@ export default function LandingPage() {
                 Every decision, fully explained.
               </h2>
               <p style={{ fontSize: 16, color: TS, lineHeight: 1.72, marginBottom: 36 }}>
-                Analysts see field-by-field match comparison, an AI confidence score, matching and
-                conflicting signals, and cited source links — all in a single, frictionless panel.
+                Analysts review only uncertain cases, with full case context, AI-generated
+                reasoning, source links, and an embedded AI chat assistant to support
+                decision-making — all in a single, frictionless panel.
               </p>
               <a
                 href="#contact"
@@ -902,45 +887,6 @@ export default function LandingPage() {
                   {f.title}
                 </h3>
                 <p style={{ fontSize: 14, color: TS, lineHeight: 1.7 }}>{f.body}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ════════════════════════════════════════════════════════
-          COMPLIANCE STRIP
-      ════════════════════════════════════════════════════════ */}
-      <section
-        id="compliance"
-        style={{
-          background: S,
-          borderTop: `1px solid ${SE}`,
-          borderBottom: `1px solid ${SE}`,
-          padding: "64px 24px",
-        }}
-      >
-        <div style={{ maxWidth: 880, margin: "0 auto", textAlign: "center" }}>
-          <p style={{ fontSize: 13, color: TS, marginBottom: 28, letterSpacing: "0.05em" }}>
-            Compliance &amp; certifications
-          </p>
-          <div className="compliance-row">
-            {COMPLIANCE_PILLS.map((pill) => (
-              <div
-                key={pill.label}
-                style={{
-                  border: `1px solid ${pill.lime ? "rgba(74,101,0,0.35)" : SE}`,
-                  borderRadius: 20,
-                  padding: "8px 18px",
-                  fontSize: 13,
-                  color: pill.lime ? LT : TS,
-                  fontWeight: pill.lime ? 600 : 400,
-                  letterSpacing: "0.03em",
-                  whiteSpace: "nowrap",
-                  background: pill.lime ? "rgba(200,240,76,0.08)" : "transparent",
-                }}
-              >
-                {pill.label}
               </div>
             ))}
           </div>
