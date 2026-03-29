@@ -13,15 +13,25 @@ import {
 } from "@/lib/screening/data";
 import { runLayer1Screening } from "@/lib/screening/layer1";
 
+// Monotonically increasing run ID — used to cancel stale pipeline runs
+let currentRunId = 0;
+
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
 async function runPipeline() {
+  const runId = ++currentRunId;
+
+  function cancelled() {
+    return runId !== currentRunId;
+  }
+
   try {
     // Stage: server boot
     runtime.stage = "server";
     await sleep(1200);
+    if (cancelled()) return;
 
     // Stage: Layer 1
     runtime.stage = "layer1";
@@ -44,18 +54,23 @@ async function runPipeline() {
       created_at: new Date().toISOString(),
     });
 
+    if (cancelled()) return;
+
     // Stage: Layer 2 — process one-by-one with 10s delay
     runtime.stage = "layer2";
     runtime.layer2Total = flags.length;
     runtime.layer2Done = 0;
 
     for (let i = 0; i < flags.length; i++) {
+      if (cancelled()) return;
+
       const flag = flags[i];
       const customer = findCustomer(flag.customer_id);
       const sanction = findSanctionsEntry(flag.entity_id);
       if (!customer || !sanction) continue;
 
       await sleep(10000);
+      if (cancelled()) return;
 
       const result = generateLayer2Result(flag, customer, sanction);
       runtime.layer2Results.push(result);
@@ -92,11 +107,15 @@ async function runPipeline() {
       runtime.layer2Done = i + 1;
     }
 
+    if (cancelled()) return;
+
     runtime.stage = "active";
     runtime.activated = true;
   } catch (err) {
     console.error("Pipeline failed:", err);
-    runtime.stage = "idle";
+    if (!cancelled()) {
+      runtime.stage = "idle";
+    }
   }
 }
 
@@ -105,6 +124,7 @@ export async function POST(request: Request) {
 
   // Reset to idle — turn off the server completely
   if (body.reset) {
+    currentRunId++; // cancel any in-flight pipeline
     resetRuntime();
     return NextResponse.json({ success: true, message: "Pipeline reset to idle" });
   }
